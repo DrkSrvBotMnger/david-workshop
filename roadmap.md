@@ -19,8 +19,10 @@ Tracking development phases, feature sets, and future ideas.
 This phase runs **in parallel** with Phase 1, gradually moving away from JSON persistence.
 
 - [ ] Install and configure `SQLAlchemy` for SQLite
-- [ ] Create initial schema:
-  - `users`, `events`, `actions`, `user_actions`, `user_event_data`
+- [✅️] Create initial schema:
+  - `users`, `events`
+- [ ] Create initial schema `actions`, `user_actions`
+- [ ] Check potential missing metadata in `userevent_data` and `invertory_item`
 - [ ] Replace:
   - [ ] `get_user_data()` → DB call
   - [ ] `create_event()` → DB insert
@@ -74,12 +76,16 @@ Eventually:
 
 ---
 
-## 🧩 Phase 3: Event Types
+## 🎄 Phase 3: Event Types & Structured Signup
 
-- [ ] `freeform` – Custom actions (in progress)
-- [ ] `bingo` – Prompt grid, track completions
-- [ ] `exchange` – Sign-up, assignment, delivery
-- [ ] Event type-specific logic loader
+- [ ] Add `bingo` event logic: prompt grid, per-prompt scoring
+- [ ] Add `exchange` event logic: signup + assignment + completion
+- [ ] `/eventsignup` — structured signup command for exchange-type events
+    - [ ] AO3, Tumblr, email, DNWs, preferences
+    - [ ] Stored securely in `user_event_data`
+- [ ] Cleanup tool: `/cleansensitive @event` to remove AO3/email/etc.
+    - [ ] Mod-only command
+    - [ ] Clears fields post-event or by request
 
 ---
 
@@ -92,14 +98,56 @@ Eventually:
 
 ---
 
-## 💡 Future Ideas
+## 🧪 Phase 4: Automated Testing & Developer Safety Nets
 
-- Team-based point events
-- Leaderboards by category (writing, art, etc.)
-- Daily or weekly challenges
-- `/eventinfo` command with banners, stats, timeline
-- Profile badges as emojis with tooltips
+Ensure the stability and future maintainability of the bot through automated tests, fake data, and dev tooling.
 
----
+### ✅ Setup
+
+- [ ] Create `/tests/` directory in project
+- [ ] Set up Python’s `unittest` framework
+- [ ] Add base test runner script: `python3 -m unittest discover tests`
+- [ ] (Optional) Install `pytest` for improved output formatting
+
+### 🧹 Data Generation
+
+- [ ] `tests/fake_data.py`
+    - [ ] `generate_fake_users(count=5)`
+    - [ ] `generate_fake_events(count=3)`
+- [ ] (Optional) `tests/truncate_db.py` to clear DB between test runs
+
+### 🧪 Core Test Suites
+
+- [ ] `test_users.py`
+    - [ ] Users are created successfully
+    - [ ] Points are valid integers
+    - [ ] No duplicate Discord IDs
+
+- [ ] `test_events.py`
+    - [ ] Event creation works with correct structure
+    - [ ] Default values for `active` and `visible` are respected
+    - [ ] Supported types only (freeform, bingo, exchange)
+
+- [ ] `test_actions.py` (after `user_actions` table exists)
+    - [ ] User actions log correctly
+    - [ ] Points are calculated and stored
+    - [ ] Admin action logging functions correctly
+
+- [ ] `test_profiles.py`
+    - [ ] Profile fetch reflects correct totals
+    - [ ] Equipped title is tracked properly
+    - [ ] Handles empty profiles gracefully
+
+### 🔧 Developer Tooling
+
+- [ ] Add testing instructions to `dev-notes.md`
+- [ ] (Optional) Create `pytest.ini` with:
+- [ ] Configure Replit “Tests” tab to run suite automatically (optional)
+
+### 🧘 Future-Safe Practices
+
+- [ ] Run full test suite before schema changes or major updates
+- [ ] Add regression tests for /eventsubmit, /shop, /inventory
+- [ ] Write validation tests for bingo, exchange, and other new event types
 
 _Last updated: July 12, 2025_
