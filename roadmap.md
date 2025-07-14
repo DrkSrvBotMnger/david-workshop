@@ -14,14 +14,14 @@ Tracking development phases, feature sets, and future ideas.
 
 ---
 
-## 🧩 Phase 0.5: SQLite Migration Plan (to replace JSON)
+## 🧩 Phase 0.5: SQLite Migration Plan + Setting automated testing tools
 
-This phase runs **in parallel** with Phase 1, gradually moving away from JSON persistence.
+### 🧪 SQLite Migration
 
 - [ ] Install and configure `SQLAlchemy` for SQLite
-- [✅️] Create initial schema:
-  - `users`, `events`
-- [ ] Create initial schema `actions`, `user_actions`
+- [ ] Create initial schema:
+  - [✅️] `users`, `events`
+  - [ ] `actions`, `user_actions`
 - [ ] Check potential missing metadata in `userevent_data` and `invertory_item`
 - [ ] Replace:
   - [ ] `get_user_data()` → DB call
@@ -35,10 +35,24 @@ This phase runs **in parallel** with Phase 1, gradually moving away from JSON pe
 Eventually:
 - [ ] Add `badges`, `titles`, `shop_items`, `purchases` to DB
 
+### ✅ Tests Setup
+
+- [ ] Create `/tests/` directory in project
+- [ ] Set up Python’s `unittest` framework
+- [ ] Add base test runner script: `python3 -m unittest discover tests`
+- [ ] (Optional) Install `pytest` for improved output formatting
+
+### 🧹 Data Generation
+
+- [ ] `tests/fake_data.py`
+    - [ ] `generate_fake_users(count=5)`
+    - [ ] `generate_fake_events(count=3)`
+- [ ] (Optional) `tests/truncate_db.py` to clear DB between test runs
+
+
 ---
 
 ## 🧠 Notes:
-- JSON files will remain during transition, but eventually become read-only backups
 - DB file will be stored as `data.db` (and excluded from Git)
 
 ---
@@ -47,6 +61,7 @@ Eventually:
 
 - [ ] type field added to events ("freeform", "bingo", "exchange")
 - [ ] `create_event()` and admin command updated to support type
+- [ ] `/defineaction` - admin command to define actions that can be done, points granted, and self-log status
 - [ ] User action logging system (user_actions.json)
 - [ ] `/eventsubmit` — user self-logs an action
 - [ ] `/eventmyscore` — user view of own score for current event
@@ -55,6 +70,31 @@ Eventually:
 - [ ] `/eventlogaction` (admin override to log for others)
 - [ ] `/eventundoaction` (admin undo)
 - [ ] Badge/title assigned on event join or completion
+
+### 🧪 Tests with Phase 1
+
+- [ ] `test_users.py`
+    - [ ] Users are created successfully
+    - [ ] Points are valid integers
+    - [ ] No duplicate Discord IDs
+
+- [ ] `test_events.py`
+    - [ ] Event creation works with correct structure
+    - [ ] Default values for `active` and `visible` are respected
+    - [ ] Event creation, edition and deletion are correctly logged
+	- [ ] Event creation only support `freeform`for now
+	
+- [ ] `test_actions.py` (after `user_actions` table exists)
+    - [ ] User actions log correctly
+    - [ ] Points are calculated and stored
+    - [ ] Admin action logging functions correctly
+
+- [ ] `test_profiles.py`
+    - [ ] Profile fetch reflects correct totals
+    - [ ] Equipped title is tracked properly
+    - [ ] Handles empty profiles gracefully
+
+- [ ] Reflect on any other needed test cases
 
 ---
 
@@ -98,45 +138,7 @@ Eventually:
 
 ---
 
-## 🧪 Phase 4: Automated Testing & Developer Safety Nets
-
-Ensure the stability and future maintainability of the bot through automated tests, fake data, and dev tooling.
-
-### ✅ Setup
-
-- [ ] Create `/tests/` directory in project
-- [ ] Set up Python’s `unittest` framework
-- [ ] Add base test runner script: `python3 -m unittest discover tests`
-- [ ] (Optional) Install `pytest` for improved output formatting
-
-### 🧹 Data Generation
-
-- [ ] `tests/fake_data.py`
-    - [ ] `generate_fake_users(count=5)`
-    - [ ] `generate_fake_events(count=3)`
-- [ ] (Optional) `tests/truncate_db.py` to clear DB between test runs
-
-### 🧪 Core Test Suites
-
-- [ ] `test_users.py`
-    - [ ] Users are created successfully
-    - [ ] Points are valid integers
-    - [ ] No duplicate Discord IDs
-
-- [ ] `test_events.py`
-    - [ ] Event creation works with correct structure
-    - [ ] Default values for `active` and `visible` are respected
-    - [ ] Supported types only (freeform, bingo, exchange)
-
-- [ ] `test_actions.py` (after `user_actions` table exists)
-    - [ ] User actions log correctly
-    - [ ] Points are calculated and stored
-    - [ ] Admin action logging functions correctly
-
-- [ ] `test_profiles.py`
-    - [ ] Profile fetch reflects correct totals
-    - [ ] Equipped title is tracked properly
-    - [ ] Handles empty profiles gracefully
+## Phase 4: Core Test Suites & Developer Safety Nets
 
 ### 🔧 Developer Tooling
 
@@ -147,7 +149,7 @@ Ensure the stability and future maintainability of the bot through automated tes
 ### 🧘 Future-Safe Practices
 
 - [ ] Run full test suite before schema changes or major updates
-- [ ] Add regression tests for /eventsubmit, /shop, /inventory
+- [ ] Add regression tests
 - [ ] Write validation tests for bingo, exchange, and other new event types
 
 _Last updated: July 12, 2025_
