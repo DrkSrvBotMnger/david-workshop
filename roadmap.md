@@ -18,23 +18,13 @@ Tracking development phases, feature sets, and future ideas.
 
 ### 🧪 SQLite Migration
 
-- [ ] Install and configure `SQLAlchemy` for SQLite
-- [ ] Create initial schema:
-  - [✅️] `users`, `events`
-  - [ ] `actions`, `user_actions`
-- [ ] Check potential missing metadata in `userevent_data` and `invertory_item`
-- [ ] Replace:
-  - [ ] `get_user_data()` → DB call
-  - [ ] `create_event()` → DB insert
-  - [ ] `log_event_action()` → DB log
-  - [ ] `get_events()` → DB query
-- [ ] Add DB-based `/profile`, `/eventlist`, `/eventsubmit`
-- [ ] Confirm that all legacy JSON calls are removed or refactored
-- [ ] Implement backup/export feature (CSV or JSON dump for admin)
-
-Eventually:
-- [ ] Add `badges`, `titles`, `shop_items`, `purchases` to DB
-
+- [✅️] Install and configure `SQLAlchemy` for SQLite
+- [✅️] Create initial schema for `User`, `Event`, `Inventory`, `UserEventData`, `Action`, `ActionEventConfig`, `UserAction`
+- [✅️] Check potential missing metadata 
+- [ ] Create remaining tables schema for Reward and EventReward
+- [ ] Create database.py for engine/session management.
+- [ ] Create init_db.py for table creation testing.
+	 
 ### ✅ Tests Setup
 
 - [ ] Create `/tests/` directory in project
@@ -59,17 +49,36 @@ Eventually:
 
 ## 🚧 Phase 1: Freeform Event System (current focus)
 
-- [ ] type field added to events ("freeform", "bingo", "exchange")
-- [ ] `create_event()` and admin command updated to support type
-- [ ] `/defineaction` - admin command to define actions that can be done, points granted, and self-log status
-- [ ] User action logging system (user_actions.json)
-- [ ] `/eventsubmit` — user self-logs an action
-- [ ] `/eventmyscore` — user view of own score for current event
-- [ ] `/eventleaderboard` — ranks users per event
-- [ ] Showcase media (if configured in action)
-- [ ] `/eventlogaction` (admin override to log for others)
-- [ ] `/eventundoaction` (admin undo)
-- [ ] Badge/title assigned on event join or completion
+- [ ] Refactor current bot commands to work with the new schemas
+    - [ ] `/profile`	
+    - [ ] `/createevent`
+    - [ ] `/editevent`
+    - [ ] `/deleteevent`
+    - [ ] `/eventlog`
+    - [ ] `/addreward`
+    - [ ] `/editreward`
+    - [ ] `/removereward` (rename deletereward)
+    - [ ] `/listwarehouse` (rename warehouse)
+    - [ ] `/eventlinkreward`
+    - [ ] `/eventunlinkreward`
+    - [ ] `/givepoints`
+    - [ ] `/removepoints` (rename takepoints)
+    - [ ] `/givereward`
+    - [ ] `/takereward`
+    - [ ] `/rewardinfo`
+	- [ ] `/eventmenu`
+	- [ ] `/eventlist`
+	- [ ] `/rewardhistory to show case both history of points and rewards in and out
+- [ ] Create a reward log akin to the event log
+- [ ] `/createaction`, and `/deleteaction` 
+- [ ] `/actioneventconfig` - admin command to define actions that can be done, points and item granted, self-log status and input help for a specific event
+- [ ] `/action` Command System
+	- [ ] `/action list event:<event>` Display available actions with input_help_text from ActionEven.tConfig.
+	- [ ] `/action perform` Validate and log user action based on Action definitions.
+- [ ] User action logging system with CRUD functions:
+	- [ ] Log actions with standardized data (url, numeric, text, boolean, date).
+- Create `/equip` command to equipe titles (limite 1), or badges (limite 10?). Item aren't equipable yet.
+
 
 ### 🧪 Tests with Phase 1
 
