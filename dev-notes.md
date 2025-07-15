@@ -8,23 +8,22 @@ This project powers a Discord bot designed for a single fandom server. It tracks
 
 - **Language**: Python
 - **Discord API**: `discord.py`
-- **Data Storage**: JSON (local on Replit)
+- **Data Storage**: SQLite
 - **Hosting**: Replit
-- **Database**: Planning to migrate to SQLite later
+- **Database**: SQLite
 
 ---
 
 ## 🧱 File Structure
 
-main.py - Core bot entry + slash commands
-utils.py - All shared data access and helper functions
-admingroup.py - Admin/mod command group
-users.json - User points, titles, badges, items (excluded from Git)
-events.json - Event definitions (safe to track)
-shop.json - Shop item definitions
-reward_log.json - Reward transaction history (excluded from Git)
-event_log.json - Admin actions and event changes (excluded from Git)
-user_actions.json - User event participation logs (excluded from Git)
+- /db/           - SQLAlchemy models and DB setup 
+- /tests/        - Automated unit tests (planned) 
+- /commands/     - Future modular command handlers 
+- main.py        - Bot entry point 
+- utils.py       - Shared helpers 
+- admingroup.py  - Admin/mod commands 
+- data.db        - SQLite database (excluded from Git) 
+- .gitignore     - Excludes secrets and sensitive data
 
 ---
 
@@ -42,10 +41,7 @@ user_actions.json - User event participation logs (excluded from Git)
 > **Important**: Certain data files are *intentionally excluded* from version control to protect user privacy and Discord data.
 
 Excluded files via `.gitignore`:
-- `users.json`
-- `reward_log.json`
-- `event_log.json`
-- `user_actions.json`
+- all db files
 - `.env` (Discord bot token and other secrets)
 
 Never commit Discord tokens or private user data.
