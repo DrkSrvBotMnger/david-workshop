@@ -132,8 +132,8 @@ class ActionEventConfig(Base):
     action_id = Column(Integer, ForeignKey('actions.id'))
     event_id = Column(Integer, ForeignKey('events.id'))
 
-    reward_points = Column(Integer, default=0)
-    reward_item = Column(String, nullable=True)
+    points_granted = Column(Integer, default=0)
+    reward_granted = Column(String, nullable=True)
     self_reportable = Column(Boolean, nullable=True)  # If None, use action default
 
     input_help_text = Column(Text, nullable=True)  # ✅ Per-event user guidance for input
@@ -168,3 +168,4 @@ class UserAction(Base):
     user = relationship("User", backref="actions")
     action = relationship("Action", backref="performed_by")
     event = relationship("Event", backref="action_logs")
+    
