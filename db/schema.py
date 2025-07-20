@@ -6,7 +6,7 @@ Base = declarative_base()
 # === TABLE DEFINITIONS ===
 
 # Users linked to Discord accounts.
-# Tracks points, profile metadata, and equipped title.
+# Tracks points and profile metadata.
 class User(Base):
     __tablename__ = 'users'
 
@@ -50,8 +50,8 @@ class Event(Base):
     modified_by = Column(String, nullable=True)
     modified_at = Column(String, nullable=True)
 
-    active = Column(Boolean, default=True)
-    visible = Column(Boolean, default=True)
+    active = Column(Boolean, default=False)
+    visible = Column(Boolean, default=False)
 
     metadata_json = Column(Text, nullable=True)
 
@@ -59,10 +59,10 @@ class Event(Base):
         return f"<Event {self.event_id} ({self.name})>"
 
 
-# Items owned by users: titles, badges, or stackable rewards.
+# Rewards owned by users: titles, badges, or items (stackable or not).
 # Can include acquisition source or equipped status.
 class Inventory(Base):
-    __tablename__ = 'inventory_items'
+    __tablename__ = 'inventory_rewards'
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'))
@@ -75,7 +75,10 @@ class Inventory(Base):
     equipped = Column(Boolean, default=False)
 
     user = relationship("User", backref="inventory")
-    source_event = relationship("Event", backref="awarded_items")
+    source_event = relationship("Event", backref="event_rewards")
+
+    def __repr__(self):
+        return f"<Inventory user_id={self.user_id} reward_id='{self.reward_id}' quantity={self.quantity}>"
 
 
 # User-specific data for a given event.
@@ -104,6 +107,10 @@ class UserEventData(Base):
     created_by = Column(String)    
     modified_by = Column(String, nullable=True)
     modified_at = Column(String, nullable=True)
+
+    def __repr__(self):
+        return f"<UserEventData user_id={self.user_id} event_id={self.event_id} status='{self.status}'>"
+
 
 # Defines possible actions users or moderators can perform.
 # Input expectations are handled in bot logic, not enforced by schema.
@@ -136,13 +143,17 @@ class ActionEventConfig(Base):
     reward_granted = Column(String, nullable=True)
     self_reportable = Column(Boolean, nullable=True)  # If None, use action default
 
-    input_help_text = Column(Text, nullable=True)  # ✅ Per-event user guidance for input
+    input_help_text = Column(Text, nullable=True)  # Per-event user guidance for input
 
     action = relationship("Action", backref="event_configs")
     event = relationship("Event", backref="action_configs")
 
     created_by = Column(String)   
     created_at = Column(String) 
+
+    def __repr__(self):
+        return f"<ActionEventConfig action_id={self.action_id} event_id={self.event_id} points={self.points_granted}>"
+
 
 # Logs individual actions performed by users.
 # Flexible standardized fields enable reporting and filtering.
@@ -154,7 +165,7 @@ class UserAction(Base):
     action_id = Column(Integer, ForeignKey('actions.id'))
     event_id = Column(Integer, ForeignKey('events.id'), nullable=True)
 
-    created_by = Column(String)    
+    created_by = Column(String)    # for when actions are logged by a mod for out of server participants
     timestamp = Column(String)  
 
     url = Column(String, nullable=True)
@@ -168,4 +179,54 @@ class UserAction(Base):
     user = relationship("User", backref="actions")
     action = relationship("Action", backref="performed_by")
     event = relationship("Event", backref="action_logs")
+
+    def __repr__(self):
+        return f"<UserAction user_id={self.user_id} action_id={self.action_id} timestamp={self.timestamp}>"
+
+
+# Rewards available: titles, badges, or items.
+# Shows stackability of items and the number of rewards distributed to users.
+class Rewards(Base):
+    __tablename__ = 'rewards'
+
+    id = Column(Integer, primary_key=True)
+    reward_id = Column(String, unique=True)
+    reward_type = Column(String, nullable=False)  # e.g., 'title', 'badge', 'item'
+    reward_name = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
     
+    emoji = Column(String, nullable=True)      # For type 'badge'
+    media_url = Column(String, nullable=True)  # For type 'item'
+    stackable = Column(Boolean, default=False) # Only relevant for type 'item'
+    
+    number_granted = Column(Integer, default=0)  # Cumulative tracking counter
+            
+    created_by = Column(String)
+    created_at = Column(String)
+    modified_by = Column(String, nullable=True)
+    modified_at = Column(String, nullable=True)
+    
+    def __repr__(self):
+        return f"<Rewards(reward_id='{self.reward_id}', type='{self.reward_type}', name='{self.reward_name}')>"
+
+
+# Links rewards to events.
+# Determines if reward is sold in shop or granted by performing an action.
+class EventReward(Base):
+    __tablename__ = 'event_rewards'
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey('events.id'), nullable=False)
+    reward_id = Column(Integer, ForeignKey('rewards.id'), nullable=False)
+
+    availability = Column(String, nullable=False, default="inshop")  
+    # 'inshop' or 'onaction'
+
+    price = Column(Integer, nullable=False, default=0)  
+    # Used if availability == 'inshop'
+
+    actionevent_id = Column(Integer, ForeignKey('action_event_configs.id'))  
+    # Used if availability == 'onaction'
+
+    def __repr__(self):
+        return f"<EventReward(event_id={self.event_id}, reward_id={self.reward_id}, availability={self.availability})>"
