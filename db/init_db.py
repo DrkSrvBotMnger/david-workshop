@@ -1,11 +1,10 @@
-# db/init_db.py
-from sqlalchemy import create_engine
-from db.schema import Base
+from database import engine
+from schema import Base
 
-# Use a local SQLite file named data.db
-DATABASE_URL = "sqlite:///data.db"
+def initialize_database():
+    print("Creating all tables...")
+    Base.metadata.create_all(bind=engine)
+    print("Database initialized.")
 
-engine = create_engine(DATABASE_URL, echo=True)
-
-def init_db():
-    Base.metadata.create_all(engine)
+if __name__ == "__main__":
+    initialize_database()
