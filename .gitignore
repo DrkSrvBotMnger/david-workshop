@@ -1,23 +1,30 @@
-# Python cache & build artifacts
+# Python cache
 __pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
+*.pyc
 
-# Replit-specific files
-.replit
-replit.nix
-.replit-db
-
-# Secrets
+# Secrets / environment variables
 .env
+.env.*
 
-# Runtime data (excluded for privacy/security)
-users.json
-reward_log.json
-event_log.json
-user_actions.json
+# Replit-specific
+.replit
+uv.lock
 
-# SQLite database if added later
-*.db
+# IDE/editor folders
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs and output
+logs/
+*.log
+
+# Deprecated or backup folders
+deprecated/
+
+# Test coverage reports
+htmlcov/
+.coverage

@@ -1,9 +1,12 @@
 [project]
-name = "python-template"
+name = "david-workshop"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "Discord bot for fandom events"
+authors = ["NessaC <darklinaserverbot@gmail.com>"]
 requires-python = ">=3.11"
 dependencies = [
     "discord-py>=2.5.2",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "pytest",
 ]
