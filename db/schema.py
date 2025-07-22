@@ -47,8 +47,6 @@ class Event(Base):
 
     created_by = Column(String)
     created_at = Column(String)
-    modified_by = Column(String, nullable=True)
-    modified_at = Column(String, nullable=True)
 
     active = Column(Boolean, default=False)
     visible = Column(Boolean, default=False)
@@ -57,6 +55,22 @@ class Event(Base):
 
     def __repr__(self):
         return f"<Event {self.event_id} ({self.name})>"
+
+# Logs changes to events by moderators.
+class EventLog(Base):
+    __tablename__ = 'event_logs'
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey('events.id'), nullable=True)
+    action = Column(String)  # e.g. 'create', 'edit', 'delete'
+    performed_by = Column(String)  # Discord ID of the mod/user
+    timestamp = Column(String)  # Store as ISO timestamp
+    description = Column(Text, nullable=True)  # Optional note or metadata
+
+    event = relationship("Event", backref="change_logs")
+
+    def __repr__(self):
+        return f"<EventLog event_id={self.event_id} action={self.action} performed_by={self.performed_by}>"
 
 
 # Rewards owned by users: titles, badges, or items (stackable or not).
@@ -203,11 +217,25 @@ class Rewards(Base):
             
     created_by = Column(String)
     created_at = Column(String)
-    modified_by = Column(String, nullable=True)
-    modified_at = Column(String, nullable=True)
     
     def __repr__(self):
         return f"<Rewards(reward_id='{self.reward_id}', type='{self.reward_type}', name='{self.reward_name}')>"
+
+# Logs changes to rewards by moderators.
+class RewardLog(Base):
+    __tablename__ = 'reward_logs'
+
+    id = Column(Integer, primary_key=True)
+    reward_id = Column(Integer, ForeignKey('rewards.id'), nullable=True)
+    action = Column(String)  # e.g. 'create', 'edit', 'delete'
+    performed_by = Column(String)  # Discord ID of the mod/user
+    timestamp = Column(String)  # ISO timestamp
+    description = Column(Text, nullable=True)  # Optional metadata (reason, changes, etc.)
+
+    reward = relationship("Rewards", backref="change_logs")
+
+    def __repr__(self):
+        return f"<RewardLog reward_id={self.reward_id} action={self.action} performed_by={self.performed_by}>"
 
 
 # Links rewards to events.

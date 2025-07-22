@@ -1,8 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from contextlib import contextmanager
+import os
 
 # Adjust path as needed – using SQLite in local file:
-DATABASE_URL = "sqlite:///bot_database.db"
+os.makedirs("db", exist_ok=True)
+DATABASE_URL = "sqlite:///db/bot_database.db"
 
 # Create engine
 engine = create_engine(DATABASE_URL, echo=False)
@@ -10,10 +13,14 @@ engine = create_engine(DATABASE_URL, echo=False)
 # Create session factory
 SessionLocal = sessionmaker(bind=engine)
 
-# Dependency function (optional, if used in modular code)
-def get_db():
-    db = SessionLocal()
+@contextmanager
+def db_session():
+    session = SessionLocal()
     try:
-        yield db
+        yield session
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise e
     finally:
-        db.close()
+        session.close()
