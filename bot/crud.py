@@ -16,7 +16,6 @@ def log_event_change(session, event_id, action, performed_by, description=None):
         description=description
     )
     session.add(log_entry)
-    session.commit()
 
 
 ## User-related operations
@@ -31,7 +30,6 @@ def get_or_create_user(session, discord_id, username=None):
             created_at=str(datetime.utcnow())
         )
         session.add(user)
-        session.commit()
     return user
 
 # Update user profile
@@ -46,7 +44,6 @@ def update_user(session, discord_id, display_name=None, nickname=None):
         user.nickname = nickname
 
     user.modified_at = str(datetime.utcnow())
-    session.commit()
     return user
 
 # Fetch user profile
@@ -97,8 +94,9 @@ def create_event(
     )
     
     session.add(event)
-    session.commit()
-
+    session.flush()  # Ensure event.id is generated
+    
+    print("✅ Event created.")
     # Log event creation
     log_event_change(
         session,
@@ -108,6 +106,7 @@ def create_event(
         description=f"Event '{name}' created."
     )
 
+    print("✅ Event logged.")
     return event
 
 
@@ -121,8 +120,6 @@ def update_event(session, event_id, modified_by, **kwargs):
         if hasattr(event, key):
             setattr(event, key, value)
 
-    session.commit()
-
     # Log event edit
     log_event_change(session, event.id, "edit", performed_by=modified_by, description=f"Event '{event.name}' updated.")
 
@@ -135,7 +132,6 @@ def delete_event(session, event_id, deleted_by):
         return False
 
     session.delete(event)
-    session.commit()
 
     # Log event deletion
     log_event_change(session, event.id, "delete", performed_by=deleted_by, description=f"Event '{event.name}' deleted.")

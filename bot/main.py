@@ -3,15 +3,40 @@ from discord.ext import commands
 import asyncio
 import os
 
+from discord import app_commands
+
 class MyBot(commands.Bot):
     async def setup_hook(self):
-        await self.load_extension("admin_commands")
-        print("Admin commands loaded.")
+        try:
+            await self.load_extension("bot.commands.admin")
+            print("✅ Admin commands loaded.")
+        except Exception as e:
+            print(f"❌ Failed to load admin commands: {e}")
 
 # Bot setup
 intents = discord.Intents.default()
+intents.members = True
+intents.guilds = True  # Optional, but recommended
+intents.message_content = True  # If needed elsewhere
+
 bot = MyBot(command_prefix="!", intents=intents)
 
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        try:
+            await interaction.response.send_message(
+                "❌ You don’t have permission to use this command.",
+                ephemeral=True
+            )
+        except discord.InteractionResponded:
+            await interaction.followup.send(
+                "❌ You don’t have permission to use this command.",
+                ephemeral=True
+            )
+
+        
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} ({bot.user.id})")

@@ -58,10 +58,11 @@ class Event(Base):
 
 # Logs changes to events by moderators.
 class EventLog(Base):
+
     __tablename__ = 'event_logs'
 
     id = Column(Integer, primary_key=True)
-    event_id = Column(Integer, ForeignKey('events.id'), nullable=True)
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)
     action = Column(String)  # e.g. 'create', 'edit', 'delete'
     performed_by = Column(String)  # Discord ID of the mod/user
     timestamp = Column(String)  # Store as ISO timestamp
@@ -79,20 +80,20 @@ class Inventory(Base):
     __tablename__ = 'inventory_rewards'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    reward_id = Column(String)
-    reward_type = Column(String)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)
     quantity = Column(Integer, default=1)
 
     acquired_at = Column(String, nullable=True)
-    source_event_id = Column(Integer, ForeignKey('events.id'), nullable=True)
+    source_event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)
     equipped = Column(Boolean, default=False)
 
     user = relationship("User", backref="inventory")
+    reward = relationship("Rewards", backref="owned_by")										
     source_event = relationship("Event", backref="event_rewards")
 
     def __repr__(self):
-        return f"<Inventory user_id={self.user_id} reward_id='{self.reward_id}' quantity={self.quantity}>"
+        return f"<Inventory user_id={self.user_id} reward_id={self.reward_id} quantity={self.quantity}>"
 
 
 # User-specific data for a given event.
@@ -101,8 +102,8 @@ class UserEventData(Base):
     __tablename__ = 'user_event_data'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    event_id = Column(Integer, ForeignKey('events.id'))
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=False)
 
     points_earned = Column(Integer, default=0)
     joined_at = Column(String)
@@ -117,7 +118,7 @@ class UserEventData(Base):
 
     user = relationship("User", backref="event_data")
     event = relationship("Event", backref="participants")
-    
+
     created_by = Column(String)    
     modified_by = Column(String, nullable=True)
     modified_at = Column(String, nullable=True)
@@ -150,8 +151,8 @@ class ActionEventConfig(Base):
     __tablename__ = 'action_event_configs'
 
     id = Column(Integer, primary_key=True)
-    action_id = Column(Integer, ForeignKey('actions.id'))
-    event_id = Column(Integer, ForeignKey('events.id'))
+    action_id = Column(Integer, ForeignKey('actions.id', ondelete="CASCADE"), nullable=False)
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)
 
     points_granted = Column(Integer, default=0)
     reward_granted = Column(String, nullable=True)
@@ -175,9 +176,9 @@ class UserAction(Base):
     __tablename__ = 'user_actions'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
-    action_id = Column(Integer, ForeignKey('actions.id'))
-    event_id = Column(Integer, ForeignKey('events.id'), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    action_id = Column(Integer, ForeignKey('actions.id', ondelete="RESTRICT"), nullable=False)
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=True)
 
     created_by = Column(String)    # for when actions are logged by a mod for out of server participants
     timestamp = Column(String)  
@@ -208,25 +209,26 @@ class Rewards(Base):
     reward_type = Column(String, nullable=False)  # e.g., 'title', 'badge', 'item'
     reward_name = Column(String, nullable=True)
     description = Column(Text, nullable=True)
-    
+
     emoji = Column(String, nullable=True)      # For type 'badge'
     media_url = Column(String, nullable=True)  # For type 'item'
     stackable = Column(Boolean, default=False) # Only relevant for type 'item'
-    
+
     number_granted = Column(Integer, default=0)  # Cumulative tracking counter
-            
+
     created_by = Column(String)
     created_at = Column(String)
-    
+
     def __repr__(self):
         return f"<Rewards(reward_id='{self.reward_id}', type='{self.reward_type}', name='{self.reward_name}')>"
+
 
 # Logs changes to rewards by moderators.
 class RewardLog(Base):
     __tablename__ = 'reward_logs'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(Integer, ForeignKey('rewards.id'), nullable=True)
+    reward_id = Column(Integer, ForeignKey('rewards.id'), ondelete="SET NULL",  nullable=True)
     action = Column(String)  # e.g. 'create', 'edit', 'delete'
     performed_by = Column(String)  # Discord ID of the mod/user
     timestamp = Column(String)  # ISO timestamp
@@ -244,17 +246,15 @@ class EventReward(Base):
     __tablename__ = 'event_rewards'
 
     id = Column(Integer, primary_key=True)
-    event_id = Column(Integer, ForeignKey('events.id'), nullable=False)
-    reward_id = Column(Integer, ForeignKey('rewards.id'), nullable=False)
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)
 
-    availability = Column(String, nullable=False, default="inshop")  
-    # 'inshop' or 'onaction'
 
-    price = Column(Integer, nullable=False, default=0)  
-    # Used if availability == 'inshop'
 
-    actionevent_id = Column(Integer, ForeignKey('action_event_configs.id'))  
-    # Used if availability == 'onaction'
+    availability = Column(String, nullable=False, default="inshop")	# 'inshop' or 'onaction'
+
+    price = Column(Integer, nullable=False, default=0)	# Used if availability == 'inshop'
+    actionevent_id = Column(Integer, ForeignKey('action_event_configs.id', ondelete="SET NULL"), nullable=True)	# Used if availability == 'onaction'
 
     def __repr__(self):
         return f"<EventReward(event_id={self.event_id}, reward_id={self.reward_id}, availability={self.availability})>"
