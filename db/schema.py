@@ -33,25 +33,27 @@ class Event(Base):
     __tablename__ = 'events'
 
     id = Column(Integer, primary_key=True)
-    event_id = Column(String, unique=True)
-    name = Column(String)
-    type = Column(String)
-    description = Column(Text)
-    start_date = Column(String)
-    end_date = Column(String)
-
+    event_id = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    start_date = Column(String, nullable=False)
+    end_date = Column(String, nullable=True)
     coordinator_id = Column(String, nullable=True)
     priority = Column(Integer, default=0)
     shop_section_id = Column(String, nullable=True)
-    embed_color = Column(Integer, default=0x7289DA)
-
-    created_by = Column(String)
-    created_at = Column(String)
+    tags = Column(String, nullable=True)  # Comma-separated for future search
+    embed_channel_id = Column(String, nullable=True)
+    embed_message_id = Column(String, nullable=True)
+    role_id = Column(String, nullable=True)
+    
+    created_by = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+    modified_by = Column(String, nullable=True)
+    modified_at = Column(String, nullable=True)
 
     active = Column(Boolean, default=False)
     visible = Column(Boolean, default=False)
-
-    metadata_json = Column(Text, nullable=True)
 
     def __repr__(self):
         return f"<Event {self.event_id} ({self.name})>"
@@ -63,9 +65,9 @@ class EventLog(Base):
 
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)
-    action = Column(String)  # e.g. 'create', 'edit', 'delete'
-    performed_by = Column(String)  # Discord ID of the mod/user
-    timestamp = Column(String)  # Store as ISO timestamp
+    action = Column(String, nullable=False)  # e.g. 'create', 'edit', 'delete'
+    performed_by = Column(String, nullable=False)  # Discord ID of the mod/user
+    timestamp = Column(String, nullable=False)  # Store as ISO timestamp
     description = Column(Text, nullable=True)  # Optional note or metadata
 
     event = relationship("Event", backref="change_logs")
@@ -228,7 +230,7 @@ class RewardLog(Base):
     __tablename__ = 'reward_logs'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(Integer, ForeignKey('rewards.id'), ondelete="SET NULL",  nullable=True)
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="SET NULL"),  nullable=True)
     action = Column(String)  # e.g. 'create', 'edit', 'delete'
     performed_by = Column(String)  # Discord ID of the mod/user
     timestamp = Column(String)  # ISO timestamp
