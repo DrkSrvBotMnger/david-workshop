@@ -9,6 +9,7 @@ dependencies = [
     "sqlalchemy",
     "psycopg2-binary",
     "pytest",
+    "pytest-asyncio",
     "pre-commit"
 ]
 [tool.pytest.ini_options]

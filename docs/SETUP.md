@@ -6,6 +6,7 @@
 * PostgreSQL (via Railway or local instance)
 * Discord bot token* 
 * Optional: `pytest` for testing
+* Optional: `pytest-asyncio` for testing
 * Optional: `pre-commit` for code quality hooks
 
 ## 📁 Project Structure Overview
@@ -98,7 +99,7 @@ Make sure DB_MODE=dev and ENV=dev are set in your .env or Replit secrets.
 ### 5. (Optional) Run Tests
 
 ```bash
-pip install pytest
+pip install pytest, pytest-asyncio
 ```
 For testing, switch `DB_MODE=test` or use the test DB initializer.
 ```bash
@@ -132,4 +133,4 @@ It enforces:
 
 ---
 
-_Last updated: July 25, 2025_
+_Last updated: July 26, 2025_
