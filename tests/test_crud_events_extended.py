@@ -167,7 +167,7 @@ def test_filter_events_by_tag(test_session):
         start_date="2025-01-01",
         end_date="2025-01-05",
         created_by="1234",
-        tags="darklina, week"
+        tags="darklina,week"
     )
     bot.crud.create_event(
         session=test_session,
@@ -189,7 +189,7 @@ def test_filter_events_by_tag(test_session):
         start_date="2025-01-11",
         end_date="2025-01-15",
         created_by="1234",
-        tags="hello, darklina, bingo"
+        tags="hello, darklina,bingo"
     )
 
     # Now filter with tag = "darklina"

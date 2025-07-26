@@ -71,10 +71,14 @@ def test_get_all_event_logs(test_session,seed_user_and_event):
         reason="Trigger log",
         name="New name"
     )
+    bot.crud.delete_event(
+        session=test_session,
+        event_id="test_event",
+        deleted_by="5678",
+        reason="Testing deletion"
+    )
     logs = bot.crud.get_all_event_logs(test_session)
     assert len(logs) >= 2  # 1 create + 1 edit
     assert any(log.EventLog.action == "create" for log in logs)
     assert any(log.EventLog.action == "edit" for log in logs)
-
-
-
+    assert any(log.EventLog.action == "delete" for log in logs)
