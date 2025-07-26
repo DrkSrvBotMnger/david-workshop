@@ -2,3 +2,4 @@ discord.py
 sqlalchemy
 psycopg2-binary
 pytest
+pre-commit
