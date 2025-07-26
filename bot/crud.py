@@ -2,6 +2,7 @@ from db.schema import User
 from db.schema import Event
 from db.schema import EventLog  # Needed for log_event_change()
 from datetime import datetime
+from sqlalchemy import or_
 
 
 ## Internal functions
@@ -62,78 +63,139 @@ def create_event(
     session,
     event_id,
     name,
-    type_,
+    type,
     description,
     start_date,
-    end_date,
     created_by,
+    end_date=None,
     coordinator_id=None,
     priority=0,
     shop_section_id=None,
-    embed_color=0x7289DA,
-    metadata_json=None,
     active=False,
-    visible=False
+    visible=False,
+    tags=None,
+    embed_channel_id=None,
+    embed_message_id=None,
+    role_id=None
 ):
     event = Event(
         event_id=event_id,
         name=name,
-        type=type_,
+        type=type,
         description=description,
         start_date=start_date,
         end_date=end_date,
         created_by=created_by,
         created_at=str(datetime.utcnow()),
-        active=False,
-        visible=False,
+        modified_by=None,
+        modified_at=None,
+        active=active,
+        visible=visible,
         coordinator_id=coordinator_id,
         priority=priority,
         shop_section_id=shop_section_id,
-        embed_color=embed_color,
-        metadata_json=metadata_json
+        tags=tags,
+        embed_channel_id=embed_channel_id,
+        embed_message_id=embed_message_id,
+        role_id=role_id
     )
-    
+
     session.add(event)
     session.flush()  # Ensure event.id is generated
     
-    print("✅ Event created.")
     # Log event creation
     log_event_change(
         session,
         event.id,
         "create",
         performed_by=created_by,
-        description=f"Event '{name}' created."
+        description=f"Event {name}({event_id}) created."
     )
 
-    print("✅ Event logged.")
     return event
 
 
 # Edit event and log the change
-def update_event(session, event_id, modified_by, **kwargs):
+def update_event(
+    session, 
+    event_id, 
+    modified_by,
+    modified_at,
+    reason=None, 
+    **kwargs
+):
     event = session.query(Event).filter_by(event_id=event_id).first()
     if not event:
         return None
-
+    event.modified_by = modified_by
+    event.modified_at = modified_at
+    
     for key, value in kwargs.items():
         if hasattr(event, key):
             setattr(event, key, value)
 
-    # Log event edit
-    log_event_change(session, event.id, "edit", performed_by=modified_by, description=f"Event '{event.name}' updated.")
+    log_description = f"Event {event.name} ({event.event_id}) updated."
+    if reason:
+        log_description += f" Reason: {reason}"
+
+    log_event_change(
+        session,
+        event.id,
+        action="edit",
+        performed_by=modified_by,
+        description=log_description
+    )
 
     return event
 
+
 # Delete event and log the deletion
-def delete_event(session, event_id, deleted_by):
+def delete_event(
+    session, 
+    event_id, 
+    deleted_by,
+    reason
+):
     event = session.query(Event).filter_by(event_id=event_id).first()
     if not event:
         return False
-
     session.delete(event)
 
+    log_description = f"Event {event.name}({event.event_id}) deleted. Reason: {reason}"
+    
     # Log event deletion
-    log_event_change(session, event.id, "delete", performed_by=deleted_by, description=f"Event '{event.name}' deleted.")
-
+    log_event_change(
+        session, 
+        event.id, 
+        "delete", 
+        performed_by=deleted_by, 
+        description=log_description
+    )
+    
     return True
+
+
+def get_all_events(session, tag: str = None, active: bool = None, visible: bool = None, mod_id: str = None):
+    query = session.query(Event)
+
+    if tag:
+        query = query.filter(Event.tags.ilike(f"%{tag}%"))
+    if active is not None:
+        query = query.filter(Event.active == active)
+    if visible is not None:
+        query = query.filter(Event.visible == visible)
+    if mod_id:
+        query = query.filter(or_(Event.created_by == mod_id, Event.modified_by == mod_id))
+
+    return query.order_by(Event.created_at.desc()).all()
+
+
+def get_all_event_logs(session, action: str = None, moderator: str = None):
+    query = session.query(EventLog, Event.event_id).outerjoin(Event, EventLog.event_id == Event.id)
+
+    if action:
+        query = query.filter(EventLog.action == action)
+    if moderator:
+        query = query.filter(EventLog.performed_by == moderator)
+
+    return query.order_by(EventLog.timestamp.desc()).all()
