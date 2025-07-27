@@ -14,6 +14,6 @@ dependencies = [
 ]
 [tool.pytest.ini_options]
 filterwarnings = [
-    "ignore::DeprecationWarning:discord.player"
+    "ignore::DeprecationWarning:discord.player",
     "ignore::DeprecationWarning:audioop"
 ]

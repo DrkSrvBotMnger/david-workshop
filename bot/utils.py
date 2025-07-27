@@ -27,20 +27,21 @@ def format_discord_timestamp(iso_str, style="F"):
         return iso_str
 
 # Check if user is a member of the moderator roles definied in config.py
-def admin_or_mod_check():
-    async def predicate(interaction: Interaction) -> bool:
-        try:
-            if interaction.guild is None:
-                return False
-            member = await interaction.guild.fetch_member(interaction.user.id)
-        except discord.NotFound:
+async def is_admin_or_mod(interaction: Interaction) -> bool:
+    try:
+        if interaction.guild is None:
             return False
+        member = await interaction.guild.fetch_member(interaction.user.id)
+    except discord.NotFound:
+        return False
 
-        return (
-            member.guild_permissions.administrator or
-            any(role.id in MOD_ROLE_IDS for role in member.roles)
-        )
-    return discord.app_commands.check(predicate)
+    return (
+        member.guild_permissions.administrator or
+        any(role.id in MOD_ROLE_IDS for role in member.roles)
+    )
+
+def admin_or_mod_check():
+    return discord.app_commands.check(is_admin_or_mod)
 
 
 # Confirmation actions
