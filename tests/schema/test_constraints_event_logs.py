@@ -1,7 +1,3 @@
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import pytest
 import sqlalchemy.exc
 import bot.crud
@@ -9,6 +5,8 @@ from datetime import datetime
 from db.schema import EventLog
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_eventlog_requires_action(test_session):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
         log = EventLog(
@@ -21,6 +19,8 @@ def test_eventlog_requires_action(test_session):
         test_session.commit()
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_eventlog_requires_performed_by(test_session):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
         log = EventLog(
@@ -33,6 +33,8 @@ def test_eventlog_requires_performed_by(test_session):
         test_session.commit()
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_eventlog_requires_timestamp(test_session):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
         log = EventLog(
@@ -45,6 +47,7 @@ def test_eventlog_requires_timestamp(test_session):
         test_session.commit()
 
 
+@pytest.mark.schema
 def test_eventlog_accepts_null_description(test_session):
     log = EventLog(
         event_id=None,
@@ -59,6 +62,8 @@ def test_eventlog_accepts_null_description(test_session):
     assert log.description is None
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_eventlog_event_id_set_null_on_delete(test_session):
     """Ensure that deleting an Event sets event_id to NULL in EventLog."""
     bot.crud.get_or_create_user(test_session, "9999", "SchemaTester")

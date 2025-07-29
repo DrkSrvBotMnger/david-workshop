@@ -9,7 +9,7 @@ import bot.crud
 import sqlalchemy.exc
 
 
-# --- Extended tests for event CRUD ---
+@pytest.mark.crud
 def test_create_event_with_optional_fields(test_session):
     bot.crud.get_or_create_user(test_session, "1234", "OptionalMod") 
     event = bot.crud.create_event(
@@ -44,6 +44,7 @@ def test_create_event_with_optional_fields(test_session):
     assert event.role_id is None
 
 
+@pytest.mark.crud
 def test_event_creation_timestamps(test_session):
     bot.crud.get_or_create_user(test_session, "1234", "TimeCheck")
     event = bot.crud.create_event(
@@ -62,6 +63,7 @@ def test_event_creation_timestamps(test_session):
     assert event.modified_at is None  # Initially unset
 
 
+@pytest.mark.crud
 def test_update_event_tags_and_priority(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.update_event(
@@ -77,6 +79,7 @@ def test_update_event_tags_and_priority(test_session, seed_user_and_event):
     assert updated.priority == 5
 
 
+@pytest.mark.crud
 def test_update_event_clears_tags(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
     # Simulate clearing tags
@@ -92,6 +95,7 @@ def test_update_event_clears_tags(test_session, seed_user_and_event):
     assert updated.tags is None
 
 
+@pytest.mark.crud
 def test_update_nonexistent_event_returns_none(test_session):
     result = bot.crud.update_event(
         session=test_session,
@@ -103,6 +107,7 @@ def test_update_nonexistent_event_returns_none(test_session):
     assert result is None
 
 
+@pytest.mark.crud
 def test_update_event_logs_reason(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
 
@@ -125,6 +130,7 @@ def test_update_event_logs_reason(test_session, seed_user_and_event):
     assert any(reason in log.description for log in edit_logs)
 
 
+@pytest.mark.crud
 def test_delete_nonexistent_event_returns_false(test_session):
     deleted = bot.crud.delete_event(
         session=test_session,
@@ -135,6 +141,7 @@ def test_delete_nonexistent_event_returns_false(test_session):
     assert deleted is False
 
 
+@pytest.mark.crud
 def test_delete_event_logs_reason(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
 
@@ -154,6 +161,7 @@ def test_delete_event_logs_reason(test_session, seed_user_and_event):
     assert any(reason in log.description for log in delete_logs)
 
 
+@pytest.mark.crud
 def test_filter_events_by_tag(test_session):
     bot.crud.get_or_create_user(test_session, "1234", "TagMod")
 
@@ -199,6 +207,7 @@ def test_filter_events_by_tag(test_session):
     assert all("darklina" in e.tags for e in filtered)
 
 
+@pytest.mark.crud
 def test_filter_tags_with_spaces_in_commas(test_session):
     bot.crud.get_or_create_user(test_session, "1234", "TagMatchMod")
 
@@ -219,6 +228,7 @@ def test_filter_tags_with_spaces_in_commas(test_session):
     assert any(e.event_id == "spaced_tags" for e in filtered)
 
 
+@pytest.mark.crud
 def test_filter_events_by_visibile(test_session):
     bot.crud.get_or_create_user(test_session, "1234", "ModVisible")
 
@@ -251,6 +261,7 @@ def test_filter_events_by_visibile(test_session):
     assert filtered[0].name == "Visible"
 
 
+@pytest.mark.crud
 def test_filter_events_by_active(test_session):
     bot.crud.get_or_create_user(test_session, "1234", "ModActive")
 
@@ -283,6 +294,7 @@ def test_filter_events_by_active(test_session):
     assert filtered[0].name == "Active"
 
 
+@pytest.mark.crud
 def test_filter_events_by_mod_id(test_session):
     # Create a user (creator)
     bot.crud.get_or_create_user(test_session, "creator123", "CreatorUser")
@@ -329,6 +341,7 @@ def test_filter_events_by_mod_id(test_session):
     assert any(e.event_id == "by_editor" for e in filtered_editor)
 
 
+@pytest.mark.crud
 def test_filter_event_logs_by_action(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.update_event(
@@ -344,6 +357,7 @@ def test_filter_event_logs_by_action(test_session, seed_user_and_event):
     assert logs[0].EventLog.action == "edit"
 
 
+@pytest.mark.crud
 def test_filter_event_logs_by_moderator(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
 

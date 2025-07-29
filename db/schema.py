@@ -40,7 +40,7 @@ class Event(Base):
     start_date = Column(String, nullable=False)
     end_date = Column(String, nullable=True)
     coordinator_id = Column(String, nullable=True)
-    priority = Column(Integer, default=0)
+    priority = Column(Integer, nullable=False, default=0)
     shop_section_id = Column(String, nullable=True)
     tags = Column(String, nullable=True)  # Comma-separated for future search
     embed_channel_id = Column(String, nullable=True)
@@ -58,6 +58,7 @@ class Event(Base):
     def __repr__(self):
         return f"<Event {self.event_id} ({self.name})>"
 
+        
 # Logs changes to events by moderators.
 class EventLog(Base):
 

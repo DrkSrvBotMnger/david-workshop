@@ -8,7 +8,7 @@ from sqlalchemy import or_
 ## Internal functions
 
 # Log function
-def log_event_change(session, event_id, action, performed_by, description=None):
+def log_event_change(*,session, event_id, action, performed_by, description=None):
     log_entry = EventLog(
         event_id=event_id,
         action=action,
@@ -105,9 +105,9 @@ def create_event(
     
     # Log event creation
     log_event_change(
-        session,
-        event.id,
-        "create",
+        session=session,
+        event_id=event.id,
+        action="create",
         performed_by=created_by,
         description=f"Event {name}({event_id}) created."
     )
@@ -139,8 +139,8 @@ def update_event(
         log_description += f" Reason: {reason}"
 
     log_event_change(
-        session,
-        event.id,
+        session=session,
+        event_id=event.id,
         action="edit",
         performed_by=modified_by,
         description=log_description
@@ -165,9 +165,9 @@ def delete_event(
     
     # Log event deletion
     log_event_change(
-        session, 
-        event.id, 
-        "delete", 
+        session=session, 
+        event_id=event.id, 
+        action="delete", 
         performed_by=deleted_by, 
         description=log_description
     )

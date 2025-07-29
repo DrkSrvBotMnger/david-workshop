@@ -3,17 +3,22 @@ import discord
 from bot.utils import safe_parse_date, format_discord_timestamp, format_log_entry, EmbedPaginator
 
 
+@pytest.mark.utils
+@pytest.mark.basic
+def test_safe_parse_date_invalid_format():
+    assert safe_parse_date("13/2025/01") is None
+    assert safe_parse_date("not-a-date") is None
+
+
+@pytest.mark.utils
 def test_safe_parse_date_valid_formats():
     assert safe_parse_date("2025-01-01") == "2025-01-01"
     assert safe_parse_date("2025/01/01") == "2025-01-01"
     assert safe_parse_date("01/01/2025") == "2025-01-01"
 
 
-def test_safe_parse_date_invalid_format():
-    assert safe_parse_date("13/2025/01") is None
-    assert safe_parse_date("not-a-date") is None
-
-
+@pytest.mark.utils
+@pytest.mark.basic
 def test_format_discord_timestamp_valid():
     from datetime import datetime
     iso = datetime(2025, 1, 1, 12, 0, 0).isoformat()
@@ -22,10 +27,13 @@ def test_format_discord_timestamp_valid():
     assert result.endswith(":F>") or result.endswith(":f>")
 
 
+@pytest.mark.utils
 def test_format_discord_timestamp_invalid():
     assert format_discord_timestamp("invalid-date") == "invalid-date"
 
 
+@pytest.mark.utils
+@pytest.mark.basic
 def test_format_log_entry():
     entry = format_log_entry(
         action="edit",
@@ -39,6 +47,7 @@ def test_format_log_entry():
     assert "<@1234>" in entry
 
 
+@pytest.mark.utils
 @pytest.mark.asyncio
 async def test_embed_paginator_update_footer_sets_page_count():
     embeds = [discord.Embed(title=f"Test {i+1}") for i in range(3)]

@@ -1,26 +1,45 @@
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))			 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))			
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from db.schema import Base
 import bot.crud  # 👈 Required since crud is inside /bot
 
-import datetime
+# Automatically set up and tear down the schema once per session
+@pytest.fixture(scope="session", autouse=True)
+def initialize_test_db():
+    """
+    Automatically sets up and tears down the test database schema
+    once per test session. Applies to all tests.
+    """
+    test_db_url = os.environ["DATABASE_URL_TEST"]
+    engine = create_engine(test_db_url)
 
-# Create in-memory SQLite DB for testing										
+    # Drop and recreate all tables for a clean start
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+
+    yield  # Run tests
+
+    # Drop tables after all tests complete
+    Base.metadata.drop_all(engine)
+
+# Provide a clean DB session per test				
 @pytest.fixture(scope="function")
 def test_session():
+
     engine = create_engine(os.environ["DATABASE_URL_TEST"])
-    Base.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(bind=engine)
     session = TestingSessionLocal()
     yield session
     session.rollback()
     session.close()
-    Base.metadata.drop_all(engine)
-    
+
+
+
 # Shared test utility: user + event seeding
 @pytest.fixture
 def seed_user_and_event():

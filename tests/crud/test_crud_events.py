@@ -8,7 +8,8 @@ from db.schema import User, Event, EventLog
 import bot.crud
 
 
-# --- Basic tests for event CRUD ---
+@pytest.mark.crud
+@pytest.mark.basic
 def test_create_event(test_session,seed_user_and_event):
     event = seed_user_and_event(test_session)
     assert event.event_id == "test_event"
@@ -18,12 +19,18 @@ def test_create_event(test_session,seed_user_and_event):
     assert event.start_date == "2025-01-01"
     assert event.created_by == "1234"
 
+
+@pytest.mark.crud
+@pytest.mark.basic
 def test_get_event(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     event = bot.crud.get_event(test_session, "test_event")
     assert event is not None
     assert event.name == "Test Event"
 
+
+@pytest.mark.crud
+@pytest.mark.basic
 def test_update_event(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     modified_at = str(datetime.utcnow())
@@ -42,6 +49,9 @@ def test_update_event(test_session,seed_user_and_event):
     assert updated.modified_by == "5678"
     assert updated.modified_at == modified_at
 
+
+@pytest.mark.crud
+@pytest.mark.basic
 def test_delete_event(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     deleted = bot.crud.delete_event(
@@ -54,6 +64,9 @@ def test_delete_event(test_session,seed_user_and_event):
     assert deleted is True
     assert bot.crud.get_event(test_session, "test_event") is None
 
+
+@pytest.mark.crud
+@pytest.mark.basic
 def test_get_all_events(test_session,seed_user_and_event):
     seed_user_and_event(test_session, event_id="event1")
     seed_user_and_event(test_session, event_id="event2")
@@ -61,6 +74,9 @@ def test_get_all_events(test_session,seed_user_and_event):
     assert len(events) >= 2
     assert all(isinstance(e, Event) for e in events)
 
+
+@pytest.mark.crud
+@pytest.mark.basic
 def test_get_all_event_logs(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.update_event(

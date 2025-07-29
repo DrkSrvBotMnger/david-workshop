@@ -12,8 +12,10 @@ elif mode == "prod":
     DATABASE_URL = os.getenv("DATABASE_URL")
 else:
     DATABASE_URL = os.getenv("DATABASE_URL_DEV")
+    
 print(mode)
 print(DATABASE_URL)
+
 if not DATABASE_URL:
     raise RuntimeError(
         "❌ No DATABASE_URL found. Set DB_MODE to 'test', 'dev', or 'prod' and define the corresponding environment variable."

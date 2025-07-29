@@ -4,7 +4,7 @@ This guide outlines test coverage for database schema-level constraints in the `
 
 ---
 
-## ✅ File: `tests/schema/test_constraints_events.py`
+## 📁 File: `tests/schema/test_constraints_events.py`
 
 ### 🔹 Coverage Summary
 
@@ -15,20 +15,20 @@ This guide outlines test coverage for database schema-level constraints in the `
 | `unique=True`       | ✅         | Duplicate `event_id` fails                     |
 
 
-### 🔹 Required Field Tests
-- Fields `event_id`, `name`, `type`, `description`, `start_date`, `created_by` are mandatory
+### 🔹 Required Field Tests 🔹 basic
+- Fields `event_id`, `name`, `type`, `description`, `start_date`, `created_by`, `priority` are mandatory
 
 ### 🔹 Nullable Field Tests
-- Optional fields accept None or 0: `end_date`, `priority`, `shop_section_id`, `tags`, `event_id`, `embed_channel_id`, `embed_message_id`, `role_id`
+- Optional fields accept None: `end_date`, `shop_section_id`, `tags`, `event_id`, `embed_channel_id`, `embed_message_id`, `role_id`
 
-### 🔹 Unique Constraints
+### 🔹 Unique Constraints 🔹 basic
 - `event_id` must be unique
 
 ---
 
-## ✅ File: `tests/schema/test_constraints_event_logs.py`
+## 📁 File: `tests/schema/test_constraints_event_logs.py`
 
-### 🔹 Coverage Summary
+### 🔍 Coverage Summary
 
 | Constraint Type     | Covered ✓  | Notes                                          |
 |---------------------|------------|------------------------------------------------|
@@ -37,13 +37,13 @@ This guide outlines test coverage for database schema-level constraints in the `
 | `ondelete=SET NULL` | ✅         | Event deletion clears FK in `EventLog`         |
 
 
-### 🔹 Required Field Tests Log table
+### 🔹 Required Field Tests Log table 🔹 basic
 - Fields `action`, `performed_by`, `timestamp` are mandatory
 
 ### 🔹 Nullable Field Tests Log table
 - Optional `description` accept None
 
-### 🔹 Foreign Key Behavior Log table
+### 🔹 Foreign Key Behavior Log table 🔹 basic
 - On deletion all logs are still present
 - `event_id` become Null
 
@@ -51,11 +51,11 @@ This guide outlines test coverage for database schema-level constraints in the `
 
 ## ⚠️ Limitations
 
-It is recommand to run those test with PostgreSql as SQLite as limitation
+It is recommand to run those test with PostgreSql as SQLite has limitation
 * ON DELETE SET NULL	May not trigger in SQLite unless FK enforcement is enabled
 * ON DELETE RESTRICT	Not tested yet (e.g., UserEventData dependencies)
 * CASCADE deletes	Not yet validated on inventory or reward tables
 
 ---
 
-_Last updated: July 26, 2025_
+_Last updated: July 27, 2025_

@@ -1,13 +1,13 @@
-# ✅ Event CRUD Tests – Coverage Summary
+# 🧪 Test Guide – Event CRUD Tests
 
 This document outlines the test coverage for the `bot.crud` event-related database functions.
 
 ---
 
-## 🧪 Files
+## 📁 Files
 
-- `tests/test_crud_events.py`: Core logic tests
-- `tests/test_crud_events_extended.py`: Optional fields, filters, logs, and edge cases
+- `tests/crud/test_crud_events.py`: Core logic tests
+- `tests/crud/test_crud_events_extended.py`: Optional fields, filters, logs, and edge cases
 
 ---
 
@@ -27,21 +27,26 @@ This document outlines the test coverage for the `bot.crud` event-related databa
 ## ✅ Test Scenarios
 
 ### 🔹 Event Creation
-- Required fields only
+- Required fields only 🔹 basic
 - Optional fields (end_date,coordinator, tags, shop section, embed fields, role)
 - Timestamps (`created_at`) populated
 
 ### 🔹 Event Update
-- Updates `modified_by`, `modified_at`
+- Updates `modified_by`, `modified_at` 🔹 basic
 - Updates `tags`, `priority`, etc.
 - Optional field clearing (`tags = None`) supported
 - Update non-existent event returns `None`
 - Reason included in log entry
 
 ### 🔹 Event Deletion
-- Deletes successfully
+- Deletes successfully 🔹 basic
 - Deleting non-existent event returns `False`
 - Reason included in log entry
+  
+### 🔹 Event retrieval 🔹 basic
+- `get_event()` retrieve event created
+- `get_event()` doesn't find event deleted
+- `get_all_events()` finds all created events
   
 ### 🔹 Event Filtering
 - By tag (removing spaces correctly)
@@ -50,7 +55,7 @@ This document outlines the test coverage for the `bot.crud` event-related databa
 - By `mod_id` (creator or editor)
 
 ### 🔹 Event Logs
-- `create`, `edit`, and `delete` actions logged
+- `create`, `edit`, and `delete` actions logged 🔹 basic
 - Log reason text verified
 - Filterable by:
   - `action`
@@ -64,4 +69,4 @@ This document outlines the test coverage for the `bot.crud` event-related databa
 
 ---
 
-_Last updated: July 25, 2025_
+_Last updated: July 27, 2025_

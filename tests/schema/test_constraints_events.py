@@ -1,20 +1,15 @@
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import pytest
 import sqlalchemy.exc
+from sqlalchemy import text
 import bot.crud
-from datetime import datetime
-from db.schema import EventLog
 
 
-# --- Tests for event schema constraints ---
 # This user will be used for all tests
 @pytest.fixture
 def default_user(test_session):
     return bot.crud.get_or_create_user(test_session, "required_check", "RequiredTester")
 
+# Helper function to avoid code duplication
 def _expect_event_creation_failure(test_session, **override_fields):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
         bot.crud.create_event(
@@ -29,30 +24,52 @@ def _expect_event_creation_failure(test_session, **override_fields):
         test_session.commit()
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_requires_event_id(test_session, default_user):
     _expect_event_creation_failure(test_session, event_id=None)
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_requires_name(test_session, default_user):
     _expect_event_creation_failure(test_session, name=None)
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_requires_type(test_session, default_user):
     _expect_event_creation_failure(test_session, type=None)
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_requires_description(test_session, default_user):
     _expect_event_creation_failure(test_session, description=None)
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_requires_start_date(test_session, default_user):
     _expect_event_creation_failure(test_session, start_date=None)
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_requires_created_by(test_session, default_user):
     _expect_event_creation_failure(test_session, created_by=None)
 
 
+@pytest.mark.schema
+@pytest.mark.basic
+@pytest.mark.asyncio 
+async def test_priority_column_is_not_nullable(test_session): 
+    with pytest.raises(sqlalchemy.exc.IntegrityError):
+        test_session.execute(text(""" INSERT INTO events ( event_id, name, type, description, start_date, created_by ) VALUES ('eid', 'null_priority_evt', 'typ','should fail','2025-01-01','test user')"""))
+        test_session.commit()
+
+
+@pytest.mark.schema
 def test_event_accepts_null_optional_fields(test_session):
     """end_date should be nullable (for ongoing events)."""
     bot.crud.get_or_create_user(test_session, "null1", "Tester")
@@ -75,6 +92,8 @@ def test_event_accepts_null_optional_fields(test_session):
     assert event.end_date is None
 
 
+@pytest.mark.schema
+@pytest.mark.basic
 def test_event_id_unique_constraint(test_session):
     """Ensure event_id must be unique at the DB level."""
     bot.crud.get_or_create_user(test_session, "u1", "UniqTester")

@@ -86,7 +86,11 @@ class AdminCommands(commands.Cog):
         # Handle tags and embed channel
         tag_str = tags.strip() if tags else None
         embed_channel_id = str(embed_channel.id) if embed_channel else EMBED_CHANNEL_ID
-
+        
+        if priority < 0:
+            await interaction.followup.send("❌ Priority must be a non-negative integer.")
+            return
+        
         # Check for existing event_id then create event
         try:
             with db_session() as session:    
@@ -207,7 +211,10 @@ class AdminCommands(commands.Cog):
             if coordinator: 
                 updates["coordinator_id"] = str(coordinator.id)
             if tags:
-                updates["tags"] = None if tags.strip().upper() == "CLEAR" else tags.strip()
+                if tags.strip().upper() == "CLEAR":
+                    updates["tags"] = None
+                else:
+                    updates["tags"] = ",".join(tag.strip() for tag in tags.split(","))            
             if embed_channel: 
                 updates["embed_channel_id"] = str(embed_channel.id)
             if embed_message_id:
@@ -221,7 +228,17 @@ class AdminCommands(commands.Cog):
             if role_id:
                 updates["role_id"] = None if role_id.strip().upper() == "CLEAR" else role_id.strip()
             if priority:
-                updates["priority"] = None if priority.strip().upper() == "CLEAR" else int(priority)
+                if priority.strip().upper() == "CLEAR":
+                    updates["priority"] = 0
+                else:
+                    try:
+                        val = int(priority)
+                        if val < 0:
+                            raise ValueError
+                        updates["priority"] = val
+                    except ValueError:
+                        await interaction.followup.send("❌ Priority must be a non-negative integer or CLEAR.")
+                        return
             if shop_section_id:
                 updates["shop_section_id"] = None if shop_section_id.strip().upper() == "CLEAR" else shop_section_id
 
@@ -335,8 +352,8 @@ class AdminCommands(commands.Cog):
             event.modified_at = str(datetime.utcnow())
             
             crud.log_event_change(
-                session,
-                event.id,
+                session=session,
+                event_id=event.id,
                 action="edit",
                 performed_by=event.modified_by,
                 description=f"Event {event.name} ({event.event_id}) made visible."
@@ -405,8 +422,8 @@ class AdminCommands(commands.Cog):
             visibility_note = " (also made visible automatically)" if not was_visible else ""
             
             crud.log_event_change(
-                session,
-                event.id,
+                session=session,
+                event_id=event.id,
                 action="edit",
                 performed_by=str(interaction.user.id),
                 description=f"Event {event.name} ({event.event_id}) marked as active{visibility_note}."
@@ -459,8 +476,8 @@ class AdminCommands(commands.Cog):
             event.modified_at = str(datetime.utcnow())
     
             crud.log_event_change(
-                session,
-                event.id,
+                session=session,
+                event_id=event.id,
                 action="edit",
                 performed_by=str(interaction.user.id),
                 description=f"Event {event.name} ({event.event_id}) marked as inactive."
@@ -510,8 +527,8 @@ class AdminCommands(commands.Cog):
             event.modified_at = str(datetime.utcnow())
     
             crud.log_event_change(
-                session,
-                event.id,
+                session=session,
+                event_id=event.id,
                 action="edit",
                 performed_by=str(interaction.user.id),
                 description=f"Event {event.name} ({event.event_id}) marked as hidden."
