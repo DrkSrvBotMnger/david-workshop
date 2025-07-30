@@ -1,9 +1,7 @@
-# tests/admin/test_list_show_logs.py
-
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta
-from bot.commands.admin import AdminCommands
+from bot.commands.admin.events_admin import AdminEventCommands
 
 
 # --- Shared Fixtures / Helpers ---
@@ -56,12 +54,12 @@ async def test_list_events_pagination_priority():
         for i in range(6)
     ]
 
-    with patch("bot.crud.get_all_events", return_value=events), \
+    with patch("bot.crud.events_crud.get_all_events", return_value=events), \
          patch("db.database.db_session") as mock_db, \
-         patch("bot.commands.admin.paginate_embeds", new_callable=AsyncMock) as mock_paginate:
+         patch("bot.commands.admin.events_admin.paginate_embeds", new_callable=AsyncMock) as mock_paginate:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.list_events.callback(admin_cmds, mock_interaction)
 
         # Expect pagination function called with at least 2 pages
@@ -77,11 +75,11 @@ async def test_show_event_displays_all_core_metadata_priority():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event()
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.show_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         # Expect an embed to have been sent
@@ -116,12 +114,12 @@ async def test_eventlog_sorted_most_recent_first_and_pagination_priority():
 
     logs = [(log1, "event1"), (log2, "event2")]
 
-    with patch("bot.crud.get_all_event_logs", return_value=logs), \
+    with patch("bot.crud.events_crud.get_all_event_logs", return_value=logs), \
          patch("db.database.db_session") as mock_db, \
-         patch("bot.commands.admin.paginate_embeds", new_callable=AsyncMock) as mock_paginate:
+         patch("bot.commands.admin.events_admin.paginate_embeds", new_callable=AsyncMock) as mock_paginate:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.eventlog.callback(admin_cmds, mock_interaction)
 
         # Pagination called

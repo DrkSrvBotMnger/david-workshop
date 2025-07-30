@@ -7,11 +7,26 @@ from discord import app_commands
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
+        # List of admin command cogs to load
+        admin_cogs = [
+            "bot.commands.admin.events_admin",
+            "bot.commands.admin.actions_admin",
+        ]
+
+        for cog in admin_cogs:
+            try:
+                await self.load_extension(cog)
+                print(f"✅ Loaded {cog}")
+            except Exception as e:
+                print(f"❌ Failed to load {cog}: {e}")
+
+        # Load user commands
         try:
-            await self.load_extension("bot.commands.admin")
-            print("✅ Admin commands loaded.")
+            await self.load_extension("bot.commands.user")
+            print("✅ User commands loaded.")
         except Exception as e:
-            print(f"❌ Failed to load admin commands: {e}")
+            print(f"❌ Failed to load user commands: {e}")
+
 
 # Bot setup
 intents = discord.Intents.default()

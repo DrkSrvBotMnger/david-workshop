@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import create_engine
 from db.schema import Base
 from unittest.mock import AsyncMock, patch
-from bot.commands.admin import AdminCommands
+from bot.commands.admin.events_admin import AdminEventCommands
 
 # Engine pointing to your test DB
 engine = create_engine(os.environ["DATABASE_URL_TEST"])
@@ -37,11 +37,11 @@ async def test_delete_event_success_message(mock_interaction, test_session, seed
     event.visible = False
     test_session.commit()
 
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     event_name = event.name
-    
+
     # Patch confirm_action to always confirm
-    with patch("bot.commands.admin.confirm_action", new_callable=AsyncMock, return_value=True):
+    with patch("bot.commands.admin.events_admin.confirm_action", new_callable=AsyncMock, return_value=True):
         await admin_cmds.delete_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -57,9 +57,9 @@ async def test_delete_event_success_message(mock_interaction, test_session, seed
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_delete_event_not_found(mock_interaction, test_session):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.commands.admin.confirm_action", new_callable=AsyncMock, return_value=True):
+    with patch("bot.commands.admin.events_admin.confirm_action", new_callable=AsyncMock, return_value=True):
         await admin_cmds.delete_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -79,7 +79,7 @@ async def test_delete_event_active_blocked(mock_interaction, test_session, seed_
     event.active = True
     test_session.commit()
 
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     await admin_cmds.delete_event.callback(
         admin_cmds,
@@ -100,7 +100,7 @@ async def test_delete_event_visible_blocked(mock_interaction, test_session, seed
     event.visible = True
     test_session.commit()
 
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     await admin_cmds.delete_event.callback(
         admin_cmds,
@@ -122,10 +122,10 @@ async def test_delete_event_logs_action(mock_interaction, test_session, seed_use
     event.visible = False
     test_session.commit()
 
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.crud.log_event_change") as mock_log, \
-         patch("bot.commands.admin.confirm_action", new_callable=AsyncMock, return_value=True):
+    with patch("bot.crud.general_crud.log_event_change") as mock_log, \
+         patch("bot.commands.admin.events_admin.confirm_action", new_callable=AsyncMock, return_value=True):
         await admin_cmds.delete_event.callback(
             admin_cmds,
             interaction=mock_interaction,

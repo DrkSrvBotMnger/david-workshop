@@ -1,9 +1,7 @@
-# tests/admin/test_toggle_visibility.py
-
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
-from bot.commands.admin import AdminCommands
+from bot.commands.admin.events_admin import AdminEventCommands
 
 # --- Shared Fixtures / Helpers ---
 
@@ -48,12 +46,12 @@ async def test_display_event_success_sets_visible_and_sends_message():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.log_event_change") as mock_log, \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.general_crud.log_event_change") as mock_log, \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.display_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         assert mock_event.visible is True
@@ -70,12 +68,12 @@ async def test_display_event_sets_modified_by_and_modified_at():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.log_event_change"), \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.general_crud.log_event_change"), \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.display_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         assert mock_event.modified_by == "123"
@@ -89,12 +87,12 @@ async def test_display_event_creates_log_entry():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.log_event_change") as mock_log, \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.general_crud.log_event_change") as mock_log, \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.display_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         mock_log.assert_called_once()
@@ -113,12 +111,12 @@ async def test_hide_event_success_sets_invisible_and_sends_message():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=True, active=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.log_event_change") as mock_log, \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.general_crud.log_event_change") as mock_log, \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.hide_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         assert mock_event.visible is False
@@ -135,12 +133,12 @@ async def test_hide_event_sets_modified_by_and_modified_at():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=True, active=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.log_event_change"), \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.general_crud.log_event_change"), \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.hide_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         assert mock_event.modified_by == "123"
@@ -155,11 +153,11 @@ async def test_hide_event_active_event_cannot_be_hidden():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=True, active=True)  # active → should block
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.hide_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         # It should send the "must deactivate first" error message
@@ -178,12 +176,12 @@ async def test_hide_event_creates_log_entry():
     mock_interaction = make_mock_interaction()
     mock_event = make_mock_event(visible=True, active=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.log_event_change") as mock_log, \
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.general_crud.log_event_change") as mock_log, \
          patch("db.database.db_session") as mock_db:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
-        admin_cmds = AdminCommands(bot=None)
+        admin_cmds = AdminEventCommands(bot=None)
         await admin_cmds.hide_event.callback(admin_cmds, mock_interaction, mock_event.event_id)
 
         mock_log.assert_called_once()

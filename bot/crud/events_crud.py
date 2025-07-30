@@ -1,58 +1,9 @@
-from db.schema import User
 from db.schema import Event
-from db.schema import EventLog  # Needed for log_event_change()
+from db.schema import EventLog
 from datetime import datetime
+from bot.crud import general_crud
 from sqlalchemy import or_
 
-
-## Internal functions
-
-# Log function
-def log_event_change(*,session, event_id, action, performed_by, description=None):
-    log_entry = EventLog(
-        event_id=event_id,
-        action=action,
-        performed_by=performed_by,
-        timestamp=str(datetime.utcnow()),
-        description=description
-    )
-    session.add(log_entry)
-
-
-## User-related operations
-
-# Create or fetch existing user
-def get_or_create_user(session, discord_id, username=None):
-    user = session.query(User).filter_by(discord_id=discord_id).first()
-    if not user:
-        user = User(
-            discord_id=discord_id,
-            username=username,
-            created_at=str(datetime.utcnow())
-        )
-        session.add(user)
-    return user
-
-# Update user profile
-def update_user(session, discord_id, display_name=None, nickname=None):
-    user = session.query(User).filter_by(discord_id=discord_id).first()
-    if not user:
-        return None
-
-    if display_name:
-        user.display_name = display_name
-    if nickname:
-        user.nickname = nickname
-
-    user.modified_at = str(datetime.utcnow())
-    return user
-
-# Fetch user profile
-def get_user(session, discord_id):
-    return session.query(User).filter_by(discord_id=discord_id).first()
-
-
-## Event-related operations
 
 # Check existing events
 def get_event(session, event_id):
@@ -104,7 +55,7 @@ def create_event(
     session.flush()  # Ensure event.id is generated
     
     # Log event creation
-    log_event_change(
+    general_crud.log_event_change(
         session=session,
         event_id=event.id,
         action="create",
@@ -138,7 +89,7 @@ def update_event(
     if reason:
         log_description += f" Reason: {reason}"
 
-    log_event_change(
+    general_crud.log_event_change(
         session=session,
         event_id=event.id,
         action="edit",
@@ -164,7 +115,7 @@ def delete_event(
     log_description = f"Event {event.name}({event.event_id}) deleted. Reason: {reason}"
     
     # Log event deletion
-    log_event_change(
+    general_crud.log_event_change(
         session=session, 
         event_id=event.id, 
         action="delete", 

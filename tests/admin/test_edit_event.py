@@ -3,8 +3,8 @@ import pytest
 from sqlalchemy import create_engine
 from db.schema import Base
 from unittest.mock import AsyncMock, MagicMock, patch
-from bot.commands.admin import AdminCommands
-from bot import crud
+from bot.commands.admin.events_admin import AdminEventCommands
+import bot.crud.events_crud
 from db.database import db_session
 from db.schema import Event
 from datetime import datetime
@@ -19,7 +19,7 @@ def clean_up_after_file():
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())
-            
+
 @pytest.fixture
 def mock_interaction():
     mock = MagicMock()
@@ -35,11 +35,11 @@ def mock_interaction():
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_editevent_all_fields_updated(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event", return_value=True):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event", return_value=True):
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -66,11 +66,11 @@ async def test_editevent_all_fields_updated(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_editevent_clear_fields(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event", return_value=True):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event", return_value=True):
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -90,11 +90,11 @@ async def test_editevent_clear_fields(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_edit_event_clear_priority_sets_zero(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event") as mock_update:
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event") as mock_update:
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -106,17 +106,17 @@ async def test_edit_event_clear_priority_sets_zero(mock_interaction):
         mock_update.assert_called_once()
         _, kwargs = mock_update.call_args
         assert kwargs["priority"] == 0
-             
+
 
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_editevent_reason_in_confirmation(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False, event_id="event123")
     mock_event.name = "Renamed"  # Simulate that the update changed the name
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event", return_value=True):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event", return_value=True):
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -135,10 +135,10 @@ async def test_editevent_reason_in_confirmation(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_editevent_no_fields_provided(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event):
         await admin_cmds.edit_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -153,11 +153,11 @@ async def test_editevent_no_fields_provided(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_editevent_populates_modified_by_and_at(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event") as mock_update:
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event") as mock_update:
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -175,7 +175,7 @@ async def test_editevent_populates_modified_by_and_at(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_editevent_invalid_start_date(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     await admin_cmds.edit_event.callback(
         admin_cmds,
@@ -190,7 +190,7 @@ async def test_editevent_invalid_start_date(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_editevent_invalid_end_date(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     await admin_cmds.edit_event.callback(
         admin_cmds,
@@ -205,9 +205,9 @@ async def test_editevent_invalid_end_date(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_editevent_event_not_found(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.crud.get_event", return_value=None):
+    with patch("bot.crud.events_crud.get_event", return_value=None):
         await admin_cmds.edit_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -221,10 +221,10 @@ async def test_editevent_event_not_found(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_editevent_block_if_active(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=True)
 
-    with patch("bot.crud.get_event", return_value=mock_event):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event):
         await admin_cmds.edit_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -241,10 +241,10 @@ async def test_editevent_block_if_active(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_editevent_block_clear_embed_message_if_visible(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=True)
 
-    with patch("bot.crud.get_event", return_value=mock_event):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event):
         await admin_cmds.edit_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -260,14 +260,14 @@ async def test_editevent_block_clear_embed_message_if_visible(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_edit_event_embed_channel_and_message_id(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
     mock_channel = MagicMock()
     mock_channel.id = 888888
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event") as mock_update:
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event") as mock_update:
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -285,11 +285,11 @@ async def test_edit_event_embed_channel_and_message_id(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_edit_event_tags_are_trimmed(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
     mock_event = MagicMock(active=False, visible=False)
 
-    with patch("bot.crud.get_event", return_value=mock_event), \
-         patch("bot.crud.update_event") as mock_update:
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event), \
+         patch("bot.crud.events_crud.update_event") as mock_update:
 
         await admin_cmds.edit_event.callback(
             admin_cmds,
@@ -307,7 +307,7 @@ async def test_edit_event_tags_are_trimmed(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_edit_event_logs_action(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     # 1️⃣ Create a real event in the test DB
     with db_session() as session:
@@ -330,7 +330,7 @@ async def test_edit_event_logs_action(mock_interaction):
         db_id = event.id  # this is what log_event_change will use
 
     # 2️⃣ Patch only log_event_change so we can assert the call
-    with patch("bot.commands.admin.crud.log_event_change") as mock_log:
+    with patch("bot.commands.admin.events_admin.general_crud.log_event_change") as mock_log:
         await admin_cmds.edit_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -349,6 +349,5 @@ async def test_edit_event_logs_action(mock_interaction):
 
     # 4️⃣ Verify DB actually changed
     with db_session() as session:
-        updated_event = crud.get_event(session, event_id)
+        updated_event = bot.crud.events_crud.get_event(session, event_id)
         assert updated_event.name == "Edited Event"
-        

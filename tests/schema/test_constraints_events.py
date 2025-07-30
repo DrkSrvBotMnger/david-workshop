@@ -1,18 +1,19 @@
 import pytest
 import sqlalchemy.exc
 from sqlalchemy import text
-import bot.crud
+import bot.crud.profiles_crud
+import bot.crud.events_crud
 
 
 # This user will be used for all tests
 @pytest.fixture
 def default_user(test_session):
-    return bot.crud.get_or_create_user(test_session, "required_check", "RequiredTester")
+    return bot.crud.profiles_crud.get_or_create_user(test_session, "required_check", "RequiredTester")
 
 # Helper function to avoid code duplication
 def _expect_event_creation_failure(test_session, **override_fields):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
-        bot.crud.create_event(
+        bot.crud.events_crud.create_event(
             session=test_session,
             event_id=override_fields.get("event_id", "missing_field_evt"),
             name=override_fields.get("name", "Missing Field Test"),
@@ -72,8 +73,8 @@ async def test_priority_column_is_not_nullable(test_session):
 @pytest.mark.schema
 def test_event_accepts_null_optional_fields(test_session):
     """end_date should be nullable (for ongoing events)."""
-    bot.crud.get_or_create_user(test_session, "null1", "Tester")
-    event = bot.crud.create_event(
+    bot.crud.profiles_crud.get_or_create_user(test_session, "null1", "Tester")
+    event = bot.crud.events_crud.create_event(
         session=test_session,
         event_id="evt_null_end",
         name="No End Date",
@@ -96,9 +97,9 @@ def test_event_accepts_null_optional_fields(test_session):
 @pytest.mark.basic
 def test_event_id_unique_constraint(test_session):
     """Ensure event_id must be unique at the DB level."""
-    bot.crud.get_or_create_user(test_session, "u1", "UniqTester")
+    bot.crud.profiles_crud.get_or_create_user(test_session, "u1", "UniqTester")
 
-    bot.crud.create_event(
+    bot.crud.events_crud.create_event(
         session=test_session,
         event_id="dupe_event",
         name="Original",
@@ -110,7 +111,7 @@ def test_event_id_unique_constraint(test_session):
     )
 
     with pytest.raises(sqlalchemy.exc.IntegrityError):
-        bot.crud.create_event(
+        bot.crud.events_crud.create_event(
             session=test_session,
             event_id="dupe_event",  # Should conflict
             name="Duplicate",

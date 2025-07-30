@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from bot.commands.admin import AdminCommands
+from bot.commands.admin.events_admin import AdminEventCommands
 
 
 @pytest.fixture
@@ -18,13 +18,13 @@ def mock_interaction():
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_create_event_success_message(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     mock_created_event = MagicMock()
     mock_created_event.name = "Test Event"
 
-    with patch("bot.crud.get_event", return_value=None), \
-         patch("bot.crud.create_event", return_value=mock_created_event):
+    with patch("bot.crud.events_crud.get_event", return_value=None), \
+         patch("bot.crud.events_crud.create_event", return_value=mock_created_event):
 
         await admin_cmds.create_event.callback(
             admin_cmds,
@@ -51,7 +51,7 @@ async def test_create_event_success_message(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_create_event_invalid_start_date(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     await admin_cmds.create_event.callback(
         admin_cmds,
@@ -78,7 +78,7 @@ async def test_create_event_invalid_start_date(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_create_event_invalid_end_date(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     await admin_cmds.create_event.callback(
         admin_cmds,
@@ -105,10 +105,10 @@ async def test_create_event_invalid_end_date(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_create_event_duplicate_event_id(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     mock_event = MagicMock()
-    with patch("bot.crud.get_event", return_value=mock_event):
+    with patch("bot.crud.events_crud.get_event", return_value=mock_event):
         await admin_cmds.create_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -134,11 +134,11 @@ async def test_create_event_duplicate_event_id(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_create_event_default_coordinator_embed_event_id(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.crud.get_event", return_value=None), \
-     patch("bot.crud.create_event") as mock_create, \
-     patch("bot.commands.admin.EMBED_CHANNEL_ID", new="999999999"):
+    with patch("bot.crud.events_crud.get_event", return_value=None), \
+     patch("bot.crud.events_crud.create_event") as mock_create, \
+     patch("bot.commands.admin.events_admin.EMBED_CHANNEL_ID", new="999999999"):
 
         await admin_cmds.create_event.callback(
             admin_cmds,
@@ -156,7 +156,7 @@ async def test_create_event_default_coordinator_embed_event_id(mock_interaction)
             priority=0,
             shop_section_id=None
         )
-    
+
     assert mock_create.called
     args, kwargs = mock_create.call_args
     assert kwargs["coordinator_id"] == str(mock_interaction.user.id)
@@ -167,13 +167,13 @@ async def test_create_event_default_coordinator_embed_event_id(mock_interaction)
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_create_event_embed_channel_argument(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
     mock_channel = MagicMock()
     mock_channel.id = 777777777
 
-    with patch("bot.crud.get_event", return_value=None), \
-         patch("bot.crud.create_event") as mock_create:
+    with patch("bot.crud.events_crud.get_event", return_value=None), \
+         patch("bot.crud.events_crud.create_event") as mock_create:
 
         await admin_cmds.create_event.callback(
             admin_cmds,
@@ -200,10 +200,10 @@ async def test_create_event_embed_channel_argument(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio
 async def test_create_event_tags_trimmed(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.crud.get_event", return_value=None), \
-         patch("bot.crud.create_event") as mock_create:
+    with patch("bot.crud.events_crud.get_event", return_value=None), \
+         patch("bot.crud.events_crud.create_event") as mock_create:
 
         await admin_cmds.create_event.callback(
             admin_cmds,
@@ -230,8 +230,8 @@ async def test_create_event_tags_trimmed(mock_interaction):
 @pytest.mark.admin
 @pytest.mark.asyncio 
 async def test_create_event_invalid_priority(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
-    with patch("bot.crud.get_event", return_value=None):
+    admin_cmds = AdminEventCommands(bot=None)
+    with patch("bot.crud.events_crud.get_event", return_value=None):
         await admin_cmds.create_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -258,10 +258,10 @@ async def test_create_event_invalid_priority(mock_interaction):
 @pytest.mark.basic
 @pytest.mark.asyncio
 async def test_create_event_logs_action(mock_interaction):
-    admin_cmds = AdminCommands(bot=None)
+    admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.crud.get_event", return_value=None), \
-         patch("bot.crud.log_event_change") as mock_log, \
+    with patch("bot.crud.events_crud.get_event", return_value=None), \
+         patch("bot.crud.general_crud.log_event_change") as mock_log, \
          patch("bot.config.EMBED_CHANNEL_ID", new="123456789"):
 
         await admin_cmds.create_event.callback(

@@ -6,7 +6,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from db.schema import Base
-import bot.crud  # 👈 Required since crud is inside /bot
+import bot.crud.profiles_crud
+import bot.crud.events_crud
 
 # Automatically set up and tear down the schema once per session
 @pytest.fixture(scope="session", autouse=True)
@@ -44,8 +45,8 @@ def test_session():
 @pytest.fixture
 def seed_user_and_event():
     def _seed(session, event_id="test_event"):
-        bot.crud.get_or_create_user(session, "1234", "TestUser")
-        return bot.crud.create_event(
+        bot.crud.profiles_crud.get_or_create_user(session, "1234", "TestUser")
+        return bot.crud.events_crud.create_event(
             session=session,
             event_id=event_id,
             name="Test Event",

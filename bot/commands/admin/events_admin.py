@@ -2,23 +2,19 @@ import discord
 from typing import Optional
 from discord import app_commands
 from discord.ext import commands
-from bot import crud
+from bot.crud import events_crud
+from bot.crud import general_crud
 from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry
 from db.database import db_session
 from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID
 from discord import Interaction, Embed
 from datetime import datetime
+from bot.commands.admin.admin_root import admin_group
 
 
-class AdminCommands(commands.Cog):
+class AdminEventCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
-    # Admin command group root
-    admin_group = app_commands.Group(
-        name="admin",
-        description="Moderator-only commands."
-    )
 
 
     ## Event management commands
@@ -94,14 +90,14 @@ class AdminCommands(commands.Cog):
         # Check for existing event_id then create event
         try:
             with db_session() as session:    
-                existing_event = crud.get_event(session, event_id)
+                existing_event = events_crud.get_event(session, event_id)
                 if existing_event:
                     await interaction.followup.send(
                         f"❌ An event with ID `{event_id}` already exists. Choose a different shortcode or start date."
                     )
                     return
 
-                event = crud.create_event(
+                event = events_crud.create_event(
                     session,
                     event_id=event_id,
                     name=name,
@@ -189,7 +185,7 @@ class AdminCommands(commands.Cog):
 
         # Check for existing event_id then update event
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.")
                 return
@@ -246,7 +242,7 @@ class AdminCommands(commands.Cog):
                 await interaction.followup.send("❌ No valid fields provided to update.")
                 return
 
-            updated = crud.update_event(
+            updated = events_crud.update_event(
                 session,
                 event_id=event_id,
                 modified_by=str(interaction.user.id),
@@ -282,7 +278,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.edit_original_response(content=f"❌ Event `{event_id}` not found.")
                 return
@@ -301,7 +297,7 @@ class AdminCommands(commands.Cog):
             return
 
         with db_session() as session:
-            success = crud.delete_event(
+            success = events_crud.delete_event(
                 session,
                 event_id=event_id,
                 deleted_by=str(interaction.user.id),
@@ -328,7 +324,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.")
                 return
@@ -351,7 +347,7 @@ class AdminCommands(commands.Cog):
             event.modified_by = str(interaction.user.id)
             event.modified_at = str(datetime.utcnow())
             
-            crud.log_event_change(
+            general_crud.log_event_change(
                 session=session,
                 event_id=event.id,
                 action="edit",
@@ -390,7 +386,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.")
                 return
@@ -421,7 +417,7 @@ class AdminCommands(commands.Cog):
             # Logging
             visibility_note = " (also made visible automatically)" if not was_visible else ""
             
-            crud.log_event_change(
+            general_crud.log_event_change(
                 session=session,
                 event_id=event.id,
                 action="edit",
@@ -458,7 +454,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.")
                 return
@@ -475,7 +471,7 @@ class AdminCommands(commands.Cog):
             event.modified_by = str(interaction.user.id)
             event.modified_at = str(datetime.utcnow())
     
-            crud.log_event_change(
+            general_crud.log_event_change(
                 session=session,
                 event_id=event.id,
                 action="edit",
@@ -506,7 +502,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.")
                 return
@@ -526,7 +522,7 @@ class AdminCommands(commands.Cog):
             event.modified_by = str(interaction.user.id)
             event.modified_at = str(datetime.utcnow())
     
-            crud.log_event_change(
+            general_crud.log_event_change(
                 session=session,
                 event_id=event.id,
                 action="edit",
@@ -558,7 +554,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         
         with db_session() as session:
-            events = crud.get_all_events(session)
+            events = events_crud.get_all_events(session)
             
             if tag:
                 events = [e for e in events if e.tags and tag.strip().lower() in [t.strip().lower() for t in e.tags.split(",")]]
@@ -603,7 +599,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.", ephemeral=True)
                 return
@@ -662,7 +658,7 @@ class AdminCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
         with db_session() as session:
-            logs = crud.get_all_event_logs(session)
+            logs = events_crud.get_all_event_logs(session)
     
             if action:
                 logs = [(log, eid) for log, eid in logs if log.action == action.lower()]
@@ -700,5 +696,5 @@ class AdminCommands(commands.Cog):
 
 # === Setup Function ===
 async def setup(bot):
-    await bot.add_cog(AdminCommands(bot))
+    await bot.add_cog(AdminEventCommands(bot))
 

@@ -1,6 +1,3 @@
-import sys
-import os
-
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from bot.utils import is_admin_or_mod
