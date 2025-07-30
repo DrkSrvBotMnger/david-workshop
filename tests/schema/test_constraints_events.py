@@ -1,14 +1,14 @@
 import pytest
 import sqlalchemy.exc
 from sqlalchemy import text
-import bot.crud.profiles_crud
+import bot.crud.users_crud
 import bot.crud.events_crud
 
 
 # This user will be used for all tests
 @pytest.fixture
 def default_user(test_session):
-    return bot.crud.profiles_crud.get_or_create_user(test_session, "required_check", "RequiredTester")
+    return bot.crud.users_crud.get_or_create_user(test_session, "required_check", "RequiredTester")
 
 # Helper function to avoid code duplication
 def _expect_event_creation_failure(test_session, **override_fields):
@@ -81,7 +81,7 @@ async def test_priority_column_is_not_nullable(test_session):
 @pytest.mark.event
 def test_event_accepts_null_optional_fields(test_session):
     """end_date should be nullable (for ongoing events)."""
-    bot.crud.profiles_crud.get_or_create_user(test_session, "null1", "Tester")
+    bot.crud.users_crud.get_or_create_user(test_session, "null1", "Tester")
     event = bot.crud.events_crud.create_event(
         session=test_session,
         event_id="evt_null_end",
@@ -106,7 +106,7 @@ def test_event_accepts_null_optional_fields(test_session):
 @pytest.mark.event
 def test_event_id_unique_constraint(test_session):
     """Ensure event_id must be unique at the DB level."""
-    bot.crud.profiles_crud.get_or_create_user(test_session, "u1", "UniqTester")
+    bot.crud.users_crud.get_or_create_user(test_session, "u1", "UniqTester")
 
     bot.crud.events_crud.create_event(
         session=test_session,

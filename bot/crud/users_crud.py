@@ -32,3 +32,9 @@ def update_user(session, discord_id, display_name=None, nickname=None):
 # Fetch user profile
 def get_user(session, discord_id):
     return session.query(User).filter_by(discord_id=discord_id).first()
+
+
+def action_is_used(session, action_id: int) -> bool:
+    """Return True if any UserAction references this action_key."""
+    from db.schema import UserAction
+    return session.query(UserAction).filter(UserAction.action_id == action_id).first() is not None

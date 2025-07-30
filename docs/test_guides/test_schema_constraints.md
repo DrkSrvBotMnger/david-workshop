@@ -58,7 +58,7 @@ This guide outlines test coverage for database schema-level constraints in the `
 | `nullable=False`    | ✅         | `action_key`, `description`, `created_at` tested |
 | `nullable=True`     | ✅         | `input_fields_json` can be null |
 | `unique=True`       | ✅         | `action_key` must be unique |
-| `default`       | ✅         | `default_self_reportable` is set to true by default |
+| `default`       | ✅         | `active` and `default_self_reportable` are set to true by default |
 
 ### 🔹 Required Field Tests 🔹 basic
 - `action_key` is required (NOT NULL)
@@ -69,6 +69,7 @@ This guide outlines test coverage for database schema-level constraints in the `
 - `input_fields_json` can be `NULL`
 - 
 ### 🔹 Default Values
+- `active` is set to true by default
 - `default_self_reportable` is set to true by default
 
 ### 🔹 Unique Constraint 🔹 basic

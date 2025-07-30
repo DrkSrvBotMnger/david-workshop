@@ -137,12 +137,14 @@ class Action(Base):
 
     id = Column(Integer, primary_key=True)
     action_key = Column(String, unique=True, nullable=False)  # e.g. "submit_fic", "comment_fics"
+    active = Column(Boolean, default=True, nullable=False)
     description = Column(Text, nullable=False)
     default_self_reportable = Column(Boolean, default=True, nullable=False)
 
     input_fields_json = Column(Text, nullable=True)  # Optional: expected fields (["url"], etc.)
 
     created_at = Column(String, nullable=False)
+    deactivated_at = Column(String, nullable=True)
 
     def __repr__(self):
         return f"<Action {self.action_key}>"

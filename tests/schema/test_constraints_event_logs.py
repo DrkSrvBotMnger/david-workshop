@@ -1,6 +1,6 @@
 import pytest
 import sqlalchemy.exc
-import bot.crud.profiles_crud
+import bot.crud.users_crud
 import bot.crud.events_crud
 from datetime import datetime
 from db.schema import EventLog
@@ -72,7 +72,7 @@ def test_eventlog_accepts_null_description(test_session):
 @pytest.mark.event
 def test_eventlog_event_id_set_null_on_delete(test_session):
     """Ensure that deleting an Event sets event_id to NULL in EventLog."""
-    bot.crud.profiles_crud.get_or_create_user(test_session, "9999", "SchemaTester")
+    bot.crud.users_crud.get_or_create_user(test_session, "9999", "SchemaTester")
 
     # Create event + update to generate logs
     bot.crud.events_crud.create_event(

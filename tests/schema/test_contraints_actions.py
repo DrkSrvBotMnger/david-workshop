@@ -28,6 +28,7 @@ def test_action_key_required(session):
             default_self_reportable=True,
             input_fields_json=None
         )
+        session.flush()
     session.rollback()
 
 
@@ -50,6 +51,7 @@ def test_action_key_unique(session):
             description="Duplicate action",
             default_self_reportable=True
         )
+        session.flush()
     session.rollback()
 
 
@@ -65,7 +67,9 @@ def test_description_required(session):
             description=None,
             default_self_reportable=True
         )
+        session.flush()
     session.rollback()
+
 
 @pytest.mark.schema
 @pytest.mark.action
@@ -95,7 +99,6 @@ def test_input_fields_json_can_be_null(session):
     assert action.input_fields_json is None
 
 
-
 @pytest.mark.schema
 @pytest.mark.basic
 @pytest.mark.action
@@ -103,7 +106,20 @@ def test_created_at_required(session):
     """created_at must be provided (NOT NULL)."""
     with pytest.raises(IntegrityError):
         session.execute(text("""
-            INSERT INTO actions (action_key, description, default_self_reportable)
-            VALUES ('bad_created_at', 'Missing created_at', True)
+            INSERT INTO actions (action_key, active, description, default_self_reportable)
+            VALUES ('bad_created_at', True, 'Missing created_at', True)
+        """))
+        session.commit()
+
+
+@pytest.mark.schema
+@pytest.mark.basic
+@pytest.mark.action
+def test_active_required(session):
+    """created_at must be provided (NOT NULL)."""
+    with pytest.raises(IntegrityError):
+        session.execute(text("""
+            INSERT INTO actions (action_key, description, default_self_reportable, created_at)
+            VALUES ('bad_active', 'Missing created_at', True, '2023-01-01T00:00:00')
         """))
         session.commit()

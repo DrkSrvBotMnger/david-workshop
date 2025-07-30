@@ -1,13 +1,12 @@
 import discord
 from typing import Optional
-from discord import app_commands
+from discord import app_commands, Interaction, Embed
 from discord.ext import commands
 from bot.crud import events_crud
 from bot.crud import general_crud
 from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry
 from db.database import db_session
-from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID
-from discord import Interaction, Embed
+from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
 from datetime import datetime
 
 
@@ -570,8 +569,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             events.sort(key=lambda e: e.modified_at or e.created_at, reverse=True)
             
             pages = []
-            for i in range(0, len(events), 5):
-                chunk = events[i:i+5]
+            for i in range(0, len(events), EVENTS_PER_PAGE):
+                chunk = events[i:i+EVENTS_PER_PAGE]
                 embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})")
                 for e in chunk:
                     updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
@@ -672,8 +671,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 return
     
             embeds = []
-            for i in range(0, len(logs), 5):
-                chunk = logs[i:i+5]
+            for i in range(0, len(logs), LOGS_PER_PAGE):
+                chunk = logs[i:i+LOGS_PER_PAGE]
                 embed = discord.Embed(
                     title=f"📜 Event Logs ({i+1}-{i+len(chunk)}/{len(logs)})",
                     color=discord.Color.orange()

@@ -12,7 +12,7 @@ def create_action(session: Session, action_key: str, description: str, default_s
         created_at=str(datetime.utcnow())
     )
     session.add(action)
-    session.commit()
+    #session.commit()
     return action
 
 # --- DELETE ---
@@ -21,7 +21,7 @@ def delete_action(session: Session, action_key: str):
     if not action:
         return False
     session.delete(action)
-    session.commit()
+    #session.commit()
     return True
 
 # --- GET ---
@@ -32,5 +32,8 @@ def get_action_by_id(session: Session, action_id: int):
     return session.query(Action).filter_by(id=action_id).first()
 
 # --- LIST ---
-def get_all_actions(session: Session):
-    return session.query(Action).order_by(Action.created_at.desc()).all()
+def get_all_actions(session: Session, active: bool = None):
+    query = session.query(Action)
+    if active is not None:
+        query = query.filter(Action.active == active)
+    return query.order_by(Action.created_at.desc()).all()

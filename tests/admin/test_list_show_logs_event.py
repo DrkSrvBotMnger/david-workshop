@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta
-from bot.commands.admin.events_admin import AdminEventCommands
+from bot.commands.admin.events_admin import AdminEventCommands, EVENTS_PER_PAGE
 
 
 # --- Shared Fixtures / Helpers ---
@@ -45,14 +45,14 @@ def make_mock_event(**kwargs):
 @pytest.mark.basic
 @pytest.mark.event
 @pytest.mark.asyncio
-async def test_list_events_pagination_priority():
-    """List Events paginates correctly when >5 events."""
+async def test_list_events_pagination():
+    """List Events paginates correctly when >EVENTS_PER_PAGE events."""
     mock_interaction = make_mock_interaction()
 
-    # 6 events → should require 2 pages
+    # EVENTS_PER_PAGE+1 → should require 2 pages
     events = [
         make_mock_event(event_id=f"event_{i}", created_at=datetime.utcnow() - timedelta(days=i))
-        for i in range(6)
+        for i in range(EVENTS_PER_PAGE+1)
     ]
 
     with patch("bot.crud.events_crud.get_all_events", return_value=events), \

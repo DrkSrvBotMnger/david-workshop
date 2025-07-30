@@ -38,3 +38,9 @@ ALLOWED_ACTION_INPUT_FIELDS = [
     "boolean_value",
     "date_value"
 ]
+
+# Pagination settings
+ACTIONS_PER_PAGE = 5           # Admin action listing
+EVENTS_PER_PAGE = 5            # Event listing
+REWARDS_PER_PAGE = 5           # Shop reward listing
+LOGS_PER_PAGE = 5              # Event/user logs

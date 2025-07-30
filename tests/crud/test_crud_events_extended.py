@@ -1,13 +1,13 @@
 import pytest
 from datetime import datetime
-import bot.crud.profiles_crud
+import bot.crud.users_crud
 import bot.crud.events_crud
 
 
 @pytest.mark.crud
 @pytest.mark.event
 def test_create_event_with_optional_fields(test_session):
-    bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "OptionalMod") 
+    bot.crud.users_crud.get_or_create_user(test_session, "1234", "OptionalMod") 
     event = bot.crud.events_crud.create_event(
         session=test_session,
         event_id="opt_event",
@@ -43,7 +43,7 @@ def test_create_event_with_optional_fields(test_session):
 @pytest.mark.crud
 @pytest.mark.event
 def test_event_creation_timestamps(test_session):
-    bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "TimeCheck")
+    bot.crud.users_crud.get_or_create_user(test_session, "1234", "TimeCheck")
     event = bot.crud.events_crud.create_event(
         session=test_session,
         event_id="time_evt",
@@ -167,7 +167,7 @@ def test_delete_event_logs_reason(test_session, seed_user_and_event):
 @pytest.mark.crud
 @pytest.mark.event
 def test_filter_events_by_tag(test_session):
-    bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "TagMod")
+    bot.crud.users_crud.get_or_create_user(test_session, "1234", "TagMod")
 
     # Create 3 events with different tags
     bot.crud.events_crud.create_event(
@@ -214,7 +214,7 @@ def test_filter_events_by_tag(test_session):
 @pytest.mark.crud
 @pytest.mark.event
 def test_filter_tags_with_spaces_in_commas(test_session):
-    bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "TagMatchMod")
+    bot.crud.users_crud.get_or_create_user(test_session, "1234", "TagMatchMod")
 
     bot.crud.events_crud.create_event(
         session=test_session,
@@ -236,7 +236,7 @@ def test_filter_tags_with_spaces_in_commas(test_session):
 @pytest.mark.crud
 @pytest.mark.event
 def test_filter_events_by_visibile(test_session):
-    bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "ModVisible")
+    bot.crud.users_crud.get_or_create_user(test_session, "1234", "ModVisible")
 
     # One visible, one not
     bot.crud.events_crud.create_event(
@@ -270,7 +270,7 @@ def test_filter_events_by_visibile(test_session):
 @pytest.mark.crud
 @pytest.mark.event
 def test_filter_events_by_active(test_session):
-    bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "ModActive")
+    bot.crud.users_crud.get_or_create_user(test_session, "1234", "ModActive")
 
     # One active, one not
     bot.crud.events_crud.create_event(
@@ -305,8 +305,8 @@ def test_filter_events_by_active(test_session):
 @pytest.mark.event
 def test_filter_events_by_mod_id(test_session):
     # Create a user (creator)
-    bot.crud.profiles_crud.get_or_create_user(test_session, "creator123", "CreatorUser")
-    bot.crud.profiles_crud.get_or_create_user(test_session, "mod999", "EditorUser")
+    bot.crud.users_crud.get_or_create_user(test_session, "creator123", "CreatorUser")
+    bot.crud.users_crud.get_or_create_user(test_session, "mod999", "EditorUser")
 
     # Create 2 events
     bot.crud.events_crud.create_event(

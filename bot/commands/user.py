@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from bot import crud
+from bot.crud import events_crud
 from db.database import db_session
 from bot.config import TICKET_CHANNEL_ID
 
@@ -51,7 +51,7 @@ class UserCommands(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            event = crud.get_event(session, event_id)
+            event = events_crud.get_event(session, event_id)
             if not event:
                 await interaction.followup.send(f"❌ Event `{event_id}` not found.", ephemeral=True)
                 return

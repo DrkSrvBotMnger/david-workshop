@@ -6,7 +6,8 @@ from datetime import datetime
 from bot.utils import admin_or_mod_check, paginate_embeds
 from db.database import db_session
 from bot.crud.actions_crud import create_action as crud_create_action, get_action_by_key, get_all_actions
-from bot.config import ALLOWED_ACTION_INPUT_FIELDS
+from bot.config import ALLOWED_ACTION_INPUT_FIELDS, ACTIONS_PER_PAGE
+from bot.crud.users_crud import action_is_used
 
 
 class AdminActionCommands(commands.GroupCog, name="admin_action"):
@@ -83,16 +84,11 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
 
     # === DELETE ACTION ===
     @admin_or_mod_check()
-    @app_commands.command(name="delete", description="Delete a global action type.")
-    @app_commands.describe(
-        action_key="The unique key of the action to delete (e.g. submit_fic)"
-    )
+    @app_commands.describe(action_key="The key of the action to delete")
+    @app_commands.command(name="delete", description="Delete a global action type (if unused and active).")
     async def delete_action(self, interaction: discord.Interaction, action_key: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
-    
-        # --- Check if action exists ---
-        from bot.crud.actions_crud import get_action_by_key, delete_action as crud_delete_action
-    
+
         with db_session() as session:
             action = get_action_by_key(session, action_key)
             if not action:
@@ -101,23 +97,79 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     ephemeral=True
                 )
                 return
-    
-            # --- Delete action ---
-            crud_delete_action(session, action_key)
-    
-        # --- Confirmation ---
+
+            # Block if inactive
+            if not action.active:
+                await interaction.followup.send(
+                    f"❌ Action `{action_key}` is inactive. You cannot delete historical actions.",
+                    ephemeral=True
+                )
+                return
+
+            # Block if referenced in UserAction
+            if action_is_used(session, action.id):
+                await interaction.followup.send(
+                    f"❌ Action `{action_key}` is referenced in user history and cannot be deleted.\n"
+                    f"Deactivate it instead to keep history intact.",
+                    ephemeral=True
+                )
+                return
+
+            # Delete it
+            session.delete(action)
+            session.commit()
+
+        await interaction.followup.send(f"🗑️ Action `{action_key}` deleted successfully.", ephemeral=True)
+
+
+    # === DEACTIVATE ACTION ===
+    @admin_or_mod_check()
+    @app_commands.command(name="deactivate", description="Mark an action as inactive and version its key.")
+    @app_commands.describe(
+        action_key="The key of the action to deactivate (will be versioned)"
+    )
+    async def deactivate_action(self, interaction: discord.Interaction, action_key: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        with db_session() as session:
+            action = get_action_by_key(session, action_key)
+            if not action:
+                await interaction.followup.send(f"❌ Action `{action_key}` does not exist.", ephemeral=True)
+                return
+            if not action.active:
+                await interaction.followup.send(f"⚠️ Action `{action_key}` is already inactive.", ephemeral=True)
+                return
+
+            # Auto-version key: find next available `_vX`
+            base_key = action_key
+            version = 1
+            while True:
+                candidate_key = f"{base_key}_v{version}"
+                if not get_action_by_key(session, candidate_key):
+                    break
+                version += 1
+
+            # Update record
+            action.action_key = candidate_key
+            action.active = False
+            action.deactivated_at = datetime.utcnow().isoformat()
+            session.commit()
+
         await interaction.followup.send(
-            f"🗑️ Action `{action_key}` deleted successfully.",
+            f"✅ Action `{action_key}` has been deactivated and renamed to `{candidate_key}`.\n"
+            f"It will no longer be available for linking to new events.",
             ephemeral=True
         )
-    
 
+    
     # === LIST ACTIONS ===
     @admin_or_mod_check()
     @app_commands.command(name="list", description="List all available global actions.")
-    async def list_actions(self, interaction: discord.Interaction):
+    @app_commands.describe(
+        show_inactive="Set to True to show inactive actions as well."
+    )
+    async def list_actions(self, interaction: discord.Interaction, show_inactive: bool = False):
         print(f"listactions callback fired from: {__file__}")
-        print("1️⃣ Starting list_actions_cmd")
     
         await interaction.response.defer(thinking=True, ephemeral=True)
     
@@ -130,19 +182,24 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             "date_value": "📅"
         }
     
-        # Extract data before session closes
+        # Pull data from DB before closing session
         with db_session() as session:
             actions = get_all_actions(session)
+            
             parsed_actions = []
-    
+            
+            if not show_inactive:
+                actions = [e for e in actions if getattr(e, "active", False)]
+                
             for action in actions:
+                # Safe JSON parsing
                 try:
                     input_fields = json.loads(action.input_fields_json) if action.input_fields_json else []
                 except Exception as e:
                     print(f"ERROR: Failed to parse input_fields for {action.action_key}: {e}")
                     input_fields = []
     
-                # Truncate description if too long
+                # Truncate description to avoid embed limit
                 desc = action.description or "No description"
                 if len(desc) > 1000:
                     desc = desc[:1000] + "…"
@@ -151,29 +208,34 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     "key": action.action_key,
                     "desc": desc,
                     "self_report": action.default_self_reportable,
-                    "input_fields": input_fields
+                    "input_fields": input_fields,
+                    "active": action.active
                 })
+     
+        # Sort alphabetically by key
+        parsed_actions.sort(key=lambda a: a["key"].lower())
     
         if not parsed_actions:
-            await interaction.followup.send("ℹ️ No actions are currently defined.", ephemeral=True)
+            await interaction.followup.send("ℹ️ No actions found with the current filters.", ephemeral=True)
             return
     
-        # Build embeds (paginate if more than 25)
-        embeds = []
-        for i in range(0, len(parsed_actions), 25):
-            chunk = parsed_actions[i:i + 25]
-    
+        # Build paginated embeds
+        pages = []
+        for i in range(0, len(parsed_actions), ACTIONS_PER_PAGE):
+            chunk = parsed_actions[i:i + ACTIONS_PER_PAGE]
+            if show_inactive:
+                description_text="🟢 Active | 🔴 Inactive\nUse the **Action Key** when linking to an event.\n"
+            else:
+                description_text="Use the **Action Key** when linking to an event.\n"
             embed = discord.Embed(
-                title="📋 Available Global Actions",
-                description="Use the **Action Key** when linking to an event.",
+                title=f"📋 Global Actions ({i+1}-{i+len(chunk)}/{len(parsed_actions)})",
+                description = description_text,
                 color=discord.Color.blue()
             )
     
             for action in chunk:
-                # Convert fields to icons
-                icon_list = [
-                    f"{FIELD_ICONS.get(field, '❓')} {field}" for field in action["input_fields"]
-                ]
+                status_icon = "🟢" if action["active"] else "🔴"
+                icon_list = [f"{FIELD_ICONS.get(field, '❓')} {field}" for field in action["input_fields"]]
                 input_fields_str = ", ".join(icon_list) if icon_list else "None"
     
                 value = (
@@ -181,23 +243,20 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     f"👤 Self‑reportable: {'✅' if action['self_report'] else '❌'}\n"
                     f"📦 Input fields: {input_fields_str}"
                 )
-    
+                if show_inactive:
+                    name_display = f"🆔 `{action['key']}` {status_icon}"
+                else:
+                    name_display = f"🆔 `{action['key']}`"
+                
                 embed.add_field(
-                    name=f"🆔 `{action['key']}`",
+                    name=name_display,
                     value=value,
                     inline=False
                 )
     
-            embeds.append(embed)
+            pages.append(embed)
     
-        # Send paginated if needed
-        if len(embeds) > 1:
-            await paginate_embeds(interaction, embeds)
-        else:
-            await interaction.followup.send(embed=embeds[0], ephemeral=True)
-    
-        print("2️⃣ Done listing actions.")
-
+        await paginate_embeds(interaction, pages)
     
 
 async def setup(bot):
