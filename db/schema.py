@@ -67,8 +67,8 @@ class EventLog(Base):
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)
     action = Column(String, nullable=False)  # e.g. 'create', 'edit', 'delete'
-    performed_by = Column(String, nullable=False)  # Discord ID of the mod/user
-    timestamp = Column(String, nullable=False)  # Store as ISO timestamp
+    performed_by = Column(String, nullable=False)  
+    timestamp = Column(String, nullable=False) 
     description = Column(Text, nullable=True)  # Optional note or metadata
 
     event = relationship("Event", backref="change_logs")
@@ -176,7 +176,6 @@ class ActionEventConfig(Base):
                 f"points={self.points_granted} reward_event_id={self.reward_event_id}>")
 
 
-
 # Logs individual actions performed by users.
 # Flexible standardized fields enable reporting and filtering.
 class UserAction(Base):
@@ -212,22 +211,24 @@ class Reward(Base):
     __tablename__ = 'rewards'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(String, unique=True)
-    reward_type = Column(String, nullable=False)  # e.g., 'title', 'badge', 'item'
-    reward_name = Column(String, nullable=True)
-    description = Column(Text, nullable=True)
+    reward_id = Column(String, unique=True, nullable=False)  # Internal unique code, required
+    reward_type = Column(String, nullable=False)  # 'title', 'badge', 'item'
+    reward_name = Column(String, nullable=False) 
+    description = Column(Text, nullable=True)   
 
-    emoji = Column(String, nullable=True)      # For type 'badge'
-    media_url = Column(String, nullable=True)  # For type 'item'
-    stackable = Column(Boolean, default=False) # Only relevant for type 'item'
+    emoji = Column(String, nullable=True)         # For type 'badge'
+    media_url = Column(String, nullable=True)     # For type 'item'
+    stackable = Column(Boolean, default=False, nullable=False)  # Only for type 'item'
 
-    number_granted = Column(Integer, default=0)  # Cumulative tracking counter
+    number_granted = Column(Integer, default=0, nullable=False)  # Total distributed count
 
-    created_by = Column(String)
-    created_at = Column(String)
+    created_by = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+    modified_by = Column(String, nullable=True)
+    modified_at = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<Reward(reward_id='{self.reward_id}', type='{self.reward_type}', name='{self.reward_name}')>"
+        return f"<Reward reward_id='{self.reward_id}' type='{self.reward_type}' name='{self.reward_name}'>"
 
 
 # Logs changes to rewards by moderators.
@@ -235,11 +236,11 @@ class RewardLog(Base):
     __tablename__ = 'reward_logs'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="SET NULL"),  nullable=True)
-    action = Column(String)  # e.g. 'create', 'edit', 'delete'
-    performed_by = Column(String)  # Discord ID of the mod/user
-    timestamp = Column(String)  # ISO timestamp
-    description = Column(Text, nullable=True)  # Optional metadata (reason, changes, etc.)
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="SET NULL"), nullable=True)
+    action = Column(String, nullable=False)  # 'create', 'edit', 'delete'
+    performed_by = Column(String, nullable=False) 
+    timestamp = Column(String, nullable=False) 
+    description = Column(Text, nullable=True)  # Optional reason/details
 
     reward = relationship("Reward", backref="change_logs")
 

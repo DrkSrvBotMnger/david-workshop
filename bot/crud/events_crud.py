@@ -55,9 +55,11 @@ def create_event(
     session.flush()  # Ensure event.id is generated
     
     # Log event creation
-    general_crud.log_event_change(
+    general_crud.log_change(
         session=session,
-        event_id=event.id,
+        log_model=EventLog,
+        fk_field="event_id",
+        fk_value=event.id,
         action="create",
         performed_by=created_by,
         description=f"Event {name}({event_id}) created."
@@ -89,9 +91,11 @@ def update_event(
     if reason:
         log_description += f" Reason: {reason}"
 
-    general_crud.log_event_change(
+    general_crud.log_change(
         session=session,
-        event_id=event.id,
+        log_model=EventLog,
+        fk_field="event_id",
+        fk_value=event.id,
         action="edit",
         performed_by=modified_by,
         description=log_description
@@ -115,16 +119,18 @@ def delete_event(
     log_description = f"Event {event.name}({event.event_id}) deleted. Reason: {reason}"
     
     # Log event deletion
-    general_crud.log_event_change(
+    general_crud.log_change(
         session=session, 
-        event_id=event.id, 
+        log_model=EventLog,
+        fk_field="event_id",
+        fk_value=event.id,
         action="delete", 
         performed_by=deleted_by, 
         description=log_description
     )
     
     return True
-
+ 
 
 def get_all_events(session, tag: str = None, active: bool = None, visible: bool = None, mod_id: str = None):
     query = session.query(Event)

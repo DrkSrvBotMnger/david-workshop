@@ -270,7 +270,7 @@ async def test_create_event_logs_action(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
 
     with patch("bot.crud.events_crud.get_event", return_value=None), \
-         patch("bot.crud.general_crud.log_event_change") as mock_log, \
+         patch("bot.crud.general_crud.log_change") as mock_log, \
          patch("bot.config.EMBED_CHANNEL_ID", new="123456789"):
 
         await admin_cmds.create_event.callback(

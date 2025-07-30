@@ -341,10 +341,10 @@ async def test_edit_event_logs_action(mock_interaction):
         session.add(event)
         session.commit()
         event_id = event.event_id
-        db_id = event.id  # this is what log_event_change will use
+        db_id = event.id  # this is what log_change will use
 
-    # 2️⃣ Patch only log_event_change so we can assert the call
-    with patch("bot.commands.admin.events_admin.general_crud.log_event_change") as mock_log:
+    # 2️⃣ Patch only log_change so we can assert the call
+    with patch("bot.commands.admin.events_admin.general_crud.log_change") as mock_log:
         await admin_cmds.edit_event.callback(
             admin_cmds,
             interaction=mock_interaction,
@@ -357,7 +357,8 @@ async def test_edit_event_logs_action(mock_interaction):
         mock_log.assert_called_once()
         _, kwargs = mock_log.call_args
         assert kwargs["action"] == "edit"
-        assert kwargs["event_id"] == db_id
+        assert kwargs["fk_value"] == db_id
+        assert kwargs["fk_field"] == "event_id"
         assert kwargs["performed_by"] == str(mock_interaction.user.id)
         assert kwargs["description"] == "Event Edited Event (editable123) updated. Reason: Fixed naming"
 

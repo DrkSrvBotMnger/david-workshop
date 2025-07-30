@@ -129,7 +129,7 @@ async def test_delete_event_logs_action(mock_interaction, test_session, seed_use
 
     admin_cmds = AdminEventCommands(bot=None)
 
-    with patch("bot.crud.general_crud.log_event_change") as mock_log, \
+    with patch("bot.crud.general_crud.log_change") as mock_log, \
          patch("bot.commands.admin.events_admin.confirm_action", new_callable=AsyncMock, return_value=True):
         await admin_cmds.delete_event.callback(
             admin_cmds,

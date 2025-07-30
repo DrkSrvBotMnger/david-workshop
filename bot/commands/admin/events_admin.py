@@ -8,7 +8,7 @@ from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, pagin
 from db.database import db_session
 from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
 from datetime import datetime
-
+from db.schema import EventLog
 
 class AdminEventCommands(commands.GroupCog, name="admin_event"):
     """Admin commands for managing events."""
@@ -345,9 +345,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             event.modified_by = str(interaction.user.id)
             event.modified_at = str(datetime.utcnow())
             
-            general_crud.log_event_change(
+            general_crud.log_change(
                 session=session,
-                event_id=event.id,
+                log_model=EventLog,
+                fk_field="event_id",
+                fk_value=event.id,
                 action="edit",
                 performed_by=event.modified_by,
                 description=f"Event {event.name} ({event.event_id}) made visible."
@@ -415,9 +417,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             # Logging
             visibility_note = " (also made visible automatically)" if not was_visible else ""
             
-            general_crud.log_event_change(
+            general_crud.log_change(
                 session=session,
-                event_id=event.id,
+                log_model=EventLog,
+                fk_field="event_id",
+                fk_value=event.id,
                 action="edit",
                 performed_by=str(interaction.user.id),
                 description=f"Event {event.name} ({event.event_id}) marked as active{visibility_note}."
@@ -469,9 +473,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             event.modified_by = str(interaction.user.id)
             event.modified_at = str(datetime.utcnow())
     
-            general_crud.log_event_change(
+            general_crud.log_change(
                 session=session,
-                event_id=event.id,
+                log_model=EventLog,
+                fk_field="event_id",
+                fk_value=event.id,
                 action="edit",
                 performed_by=str(interaction.user.id),
                 description=f"Event {event.name} ({event.event_id}) marked as inactive."
@@ -520,9 +526,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             event.modified_by = str(interaction.user.id)
             event.modified_at = str(datetime.utcnow())
     
-            general_crud.log_event_change(
+            general_crud.log_change(
                 session=session,
-                event_id=event.id,
+                log_model=EventLog,
+                fk_field="event_id",
+                fk_value=event.id,
                 action="edit",
                 performed_by=str(interaction.user.id),
                 description=f"Event {event.name} ({event.event_id}) marked as hidden."
