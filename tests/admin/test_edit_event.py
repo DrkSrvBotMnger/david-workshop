@@ -33,6 +33,7 @@ def mock_interaction():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_all_fields_updated(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -64,6 +65,7 @@ async def test_editevent_all_fields_updated(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_clear_fields(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -88,6 +90,7 @@ async def test_editevent_clear_fields(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_edit_event_clear_priority_sets_zero(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -109,6 +112,7 @@ async def test_edit_event_clear_priority_sets_zero(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_reason_in_confirmation(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -133,6 +137,7 @@ async def test_editevent_reason_in_confirmation(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_no_fields_provided(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -151,6 +156,7 @@ async def test_editevent_no_fields_provided(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_populates_modified_by_and_at(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -173,6 +179,7 @@ async def test_editevent_populates_modified_by_and_at(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_invalid_start_date(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -188,6 +195,7 @@ async def test_editevent_invalid_start_date(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_invalid_end_date(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -203,6 +211,7 @@ async def test_editevent_invalid_end_date(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_event_not_found(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -219,6 +228,7 @@ async def test_editevent_event_not_found(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_block_if_active(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -239,6 +249,7 @@ async def test_editevent_block_if_active(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_editevent_block_clear_embed_message_if_visible(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -258,6 +269,7 @@ async def test_editevent_block_clear_embed_message_if_visible(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_edit_event_embed_channel_and_message_id(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -283,6 +295,7 @@ async def test_edit_event_embed_channel_and_message_id(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_edit_event_tags_are_trimmed(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -305,6 +318,7 @@ async def test_edit_event_tags_are_trimmed(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_edit_event_logs_action(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)

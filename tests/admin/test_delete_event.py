@@ -29,6 +29,7 @@ def mock_interaction():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_delete_event_success_message(mock_interaction, test_session, seed_user_and_event):
     # Seed DB with a non-active, non-visible event
@@ -55,6 +56,7 @@ async def test_delete_event_success_message(mock_interaction, test_session, seed
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_delete_event_not_found(mock_interaction, test_session):
     admin_cmds = AdminEventCommands(bot=None)
@@ -73,6 +75,7 @@ async def test_delete_event_not_found(mock_interaction, test_session):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_delete_event_active_blocked(mock_interaction, test_session, seed_user_and_event):
     event = seed_user_and_event(test_session, event_id="active_event")
@@ -94,6 +97,7 @@ async def test_delete_event_active_blocked(mock_interaction, test_session, seed_
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_delete_event_visible_blocked(mock_interaction, test_session, seed_user_and_event):
     event = seed_user_and_event(test_session, event_id="visible_event")
@@ -115,6 +119,7 @@ async def test_delete_event_visible_blocked(mock_interaction, test_session, seed
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_delete_event_logs_action(mock_interaction, test_session, seed_user_and_event):
     event = seed_user_and_event(test_session, event_id="log_me")

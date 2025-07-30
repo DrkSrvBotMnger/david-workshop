@@ -2,17 +2,15 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
-
 from discord import app_commands
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
-        # List of admin command cogs to load
+    # Load all cogs first
         admin_cogs = [
             "bot.commands.admin.events_admin",
             "bot.commands.admin.actions_admin",
         ]
-
         for cog in admin_cogs:
             try:
                 await self.load_extension(cog)
@@ -20,13 +18,11 @@ class MyBot(commands.Bot):
             except Exception as e:
                 print(f"❌ Failed to load {cog}: {e}")
 
-        # Load user commands
         try:
             await self.load_extension("bot.commands.user")
             print("✅ User commands loaded.")
         except Exception as e:
             print(f"❌ Failed to load user commands: {e}")
-
 
 # Bot setup
 intents = discord.Intents.default()
@@ -35,7 +31,6 @@ intents.guilds = True  # Optional, but recommended
 intents.message_content = True  # If needed elsewhere
 
 bot = MyBot(command_prefix="!", intents=intents)
-
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -50,7 +45,6 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
                 "❌ You don’t have permission to use this command.",
                 ephemeral=True
             )
-
         
 @bot.event
 async def on_ready():
@@ -58,6 +52,8 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands.")
+        for cmd in bot.tree.walk_commands():
+            print(cmd.qualified_name)
     except Exception as e:
         print(f"Error syncing commands: {e}")
 

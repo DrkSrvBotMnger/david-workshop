@@ -38,10 +38,9 @@ def make_mock_interaction():
     return inter
 
 
-# --- ACTIVATE EVENT TESTS ---
-
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_activate_event_success_sets_active_and_sends_message():
     mock_interaction = make_mock_interaction()
@@ -62,6 +61,7 @@ async def test_activate_event_success_sets_active_and_sends_message():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_activate_event_auto_sets_visible_if_not_visible():
     """Activate event should automatically set visible=True if it was not already visible."""
@@ -83,6 +83,7 @@ async def test_activate_event_auto_sets_visible_if_not_visible():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_activate_event_sets_modified_by_and_modified_at():
     mock_interaction = make_mock_interaction()
@@ -102,6 +103,7 @@ async def test_activate_event_sets_modified_by_and_modified_at():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_activate_event_creates_log_entry():
     mock_interaction = make_mock_interaction()
@@ -122,10 +124,9 @@ async def test_activate_event_creates_log_entry():
         assert "marked as active" in kwargs["description"]
 
 
-# --- DEACTIVATE EVENT TESTS ---
-
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_deactivate_event_success_sets_inactive_and_sends_message():
     mock_interaction = make_mock_interaction()
@@ -146,6 +147,7 @@ async def test_deactivate_event_success_sets_inactive_and_sends_message():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_deactivate_event_sets_modified_by_and_modified_at():
     mock_interaction = make_mock_interaction()
@@ -165,6 +167,7 @@ async def test_deactivate_event_sets_modified_by_and_modified_at():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_deactivate_event_creates_log_entry():
     mock_interaction = make_mock_interaction()

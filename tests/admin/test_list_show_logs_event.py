@@ -41,8 +41,9 @@ def make_mock_event(**kwargs):
     return event
 
 
-# --- LIST EVENTS TESTS ---
-
+@pytest.mark.admin
+@pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_list_events_pagination_priority():
     """List Events paginates correctly when >5 events."""
@@ -68,8 +69,9 @@ async def test_list_events_pagination_priority():
         assert len(pages) >= 2
 
 
-# --- SHOW EVENT TESTS ---
-
+@pytest.mark.admin
+@pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_show_event_displays_all_core_metadata_priority():
     mock_interaction = make_mock_interaction()
@@ -93,8 +95,9 @@ async def test_show_event_displays_all_core_metadata_priority():
         assert str(mock_event.priority) in str(sent_embed.to_dict())
 
 
-# --- EVENT LOGS TESTS ---
-
+@pytest.mark.admin
+@pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_eventlog_sorted_most_recent_first_and_pagination_priority():
     mock_interaction = make_mock_interaction()

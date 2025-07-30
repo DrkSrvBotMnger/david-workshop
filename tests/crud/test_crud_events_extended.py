@@ -5,6 +5,7 @@ import bot.crud.events_crud
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_create_event_with_optional_fields(test_session):
     bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "OptionalMod") 
     event = bot.crud.events_crud.create_event(
@@ -40,6 +41,7 @@ def test_create_event_with_optional_fields(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_event_creation_timestamps(test_session):
     bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "TimeCheck")
     event = bot.crud.events_crud.create_event(
@@ -59,6 +61,7 @@ def test_event_creation_timestamps(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_update_event_tags_and_priority(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.events_crud.update_event(
@@ -75,6 +78,7 @@ def test_update_event_tags_and_priority(test_session, seed_user_and_event):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_update_event_clears_tags(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
     # Simulate clearing tags
@@ -91,6 +95,7 @@ def test_update_event_clears_tags(test_session, seed_user_and_event):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_update_nonexistent_event_returns_none(test_session):
     result = bot.crud.events_crud.update_event(
         session=test_session,
@@ -103,6 +108,7 @@ def test_update_nonexistent_event_returns_none(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_update_event_logs_reason(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
 
@@ -126,6 +132,7 @@ def test_update_event_logs_reason(test_session, seed_user_and_event):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_delete_nonexistent_event_returns_false(test_session):
     deleted = bot.crud.events_crud.delete_event(
         session=test_session,
@@ -137,6 +144,7 @@ def test_delete_nonexistent_event_returns_false(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_delete_event_logs_reason(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
 
@@ -157,6 +165,7 @@ def test_delete_event_logs_reason(test_session, seed_user_and_event):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_events_by_tag(test_session):
     bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "TagMod")
 
@@ -203,6 +212,7 @@ def test_filter_events_by_tag(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_tags_with_spaces_in_commas(test_session):
     bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "TagMatchMod")
 
@@ -224,6 +234,7 @@ def test_filter_tags_with_spaces_in_commas(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_events_by_visibile(test_session):
     bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "ModVisible")
 
@@ -257,6 +268,7 @@ def test_filter_events_by_visibile(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_events_by_active(test_session):
     bot.crud.profiles_crud.get_or_create_user(test_session, "1234", "ModActive")
 
@@ -290,6 +302,7 @@ def test_filter_events_by_active(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_events_by_mod_id(test_session):
     # Create a user (creator)
     bot.crud.profiles_crud.get_or_create_user(test_session, "creator123", "CreatorUser")
@@ -337,6 +350,7 @@ def test_filter_events_by_mod_id(test_session):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_event_logs_by_action(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.events_crud.update_event(
@@ -353,6 +367,7 @@ def test_filter_event_logs_by_action(test_session, seed_user_and_event):
 
 
 @pytest.mark.crud
+@pytest.mark.event
 def test_filter_event_logs_by_moderator(test_session, seed_user_and_event):
     seed_user_and_event(test_session)
 

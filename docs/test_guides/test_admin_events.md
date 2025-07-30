@@ -9,6 +9,9 @@ This document tracks the test coverage for `/admin`-related commands for events.
 - `tests/admin/test_create_event.py`
 - `tests/admin/test_edit_event.py`
 - `tests/admin/test_delete_event.py`
+- `tests/admin/test_list_show_event.py`
+- `tests/admin/test_toggle_active_event.py`
+- `tests/admin/test_toggle_visibility_event.py`
 
 ---
 

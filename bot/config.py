@@ -29,3 +29,12 @@ MOD_ROLE_IDS = CONFIG["MOD_ROLE_IDS"]
 EMBED_CHANNEL_ID = CONFIG["EMBED_CHANNEL_ID"]
 EVENT_ANNOUNCEMENT_CHANNEL_ID = CONFIG["EVENT_ANNOUNCEMENT_CHANNEL_ID"]
 TICKET_CHANNEL_ID = CONFIG["TICKET_CHANNEL_ID"]
+
+# Allowed input fields for Action definitions
+ALLOWED_ACTION_INPUT_FIELDS = [
+    "url",
+    "numeric_value",
+    "text_value",
+    "boolean_value",
+    "date_value"
+]

@@ -38,9 +38,9 @@ def make_mock_interaction():
     return inter
 
 
-# --- DISPLAY EVENT TESTS ---
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_display_event_success_sets_visible_and_sends_message():
     mock_interaction = make_mock_interaction()
@@ -63,6 +63,7 @@ async def test_display_event_success_sets_visible_and_sends_message():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_display_event_sets_modified_by_and_modified_at():
     mock_interaction = make_mock_interaction()
@@ -82,6 +83,7 @@ async def test_display_event_sets_modified_by_and_modified_at():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_display_event_creates_log_entry():
     mock_interaction = make_mock_interaction()
@@ -102,10 +104,9 @@ async def test_display_event_creates_log_entry():
         assert "made visible" in kwargs["description"]
 
 
-# --- HIDE EVENT TESTS ---
-
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_hide_event_success_sets_invisible_and_sends_message():
     mock_interaction = make_mock_interaction()
@@ -128,6 +129,7 @@ async def test_hide_event_success_sets_invisible_and_sends_message():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_hide_event_sets_modified_by_and_modified_at():
     mock_interaction = make_mock_interaction()
@@ -147,6 +149,7 @@ async def test_hide_event_sets_modified_by_and_modified_at():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_hide_event_active_event_cannot_be_hidden():
     """An active event should not be allowed to be hidden."""
@@ -171,6 +174,7 @@ async def test_hide_event_active_event_cannot_be_hidden():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_hide_event_creates_log_entry():
     mock_interaction = make_mock_interaction()

@@ -27,42 +27,49 @@ def _expect_event_creation_failure(test_session, **override_fields):
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_requires_event_id(test_session, default_user):
     _expect_event_creation_failure(test_session, event_id=None)
 
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_requires_name(test_session, default_user):
     _expect_event_creation_failure(test_session, name=None)
 
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_requires_type(test_session, default_user):
     _expect_event_creation_failure(test_session, type=None)
 
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_requires_description(test_session, default_user):
     _expect_event_creation_failure(test_session, description=None)
 
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_requires_start_date(test_session, default_user):
     _expect_event_creation_failure(test_session, start_date=None)
 
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_requires_created_by(test_session, default_user):
     _expect_event_creation_failure(test_session, created_by=None)
 
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio 
 async def test_priority_column_is_not_nullable(test_session): 
     with pytest.raises(sqlalchemy.exc.IntegrityError):
@@ -71,6 +78,7 @@ async def test_priority_column_is_not_nullable(test_session):
 
 
 @pytest.mark.schema
+@pytest.mark.event
 def test_event_accepts_null_optional_fields(test_session):
     """end_date should be nullable (for ongoing events)."""
     bot.crud.profiles_crud.get_or_create_user(test_session, "null1", "Tester")
@@ -95,6 +103,7 @@ def test_event_accepts_null_optional_fields(test_session):
 
 @pytest.mark.schema
 @pytest.mark.basic
+@pytest.mark.event
 def test_event_id_unique_constraint(test_session):
     """Ensure event_id must be unique at the DB level."""
     bot.crud.profiles_crud.get_or_create_user(test_session, "u1", "UniqTester")

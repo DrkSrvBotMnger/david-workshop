@@ -49,6 +49,33 @@ This guide outlines test coverage for database schema-level constraints in the `
 
 ---
 
+## 📁 File: `tests/schema/test_constraints_actions.py`
+
+### 🔹 Coverage Summary
+
+| Constraint Type     | Covered ✓  | Notes |
+|---------------------|------------|-------|
+| `nullable=False`    | ✅         | `action_key`, `description`, `created_at` tested |
+| `nullable=True`     | ✅         | `input_fields_json` can be null |
+| `unique=True`       | ✅         | `action_key` must be unique |
+| `default`       | ✅         | `default_self_reportable` is set to true by default |
+
+### 🔹 Required Field Tests 🔹 basic
+- `action_key` is required (NOT NULL)
+- `description` is required
+- `created_at` is required
+
+### 🔹 Nullable Field Tests
+- `input_fields_json` can be `NULL`
+- 
+### 🔹 Default Values
+- `default_self_reportable` is set to true by default
+
+### 🔹 Unique Constraint 🔹 basic
+- `action_key` must be unique
+
+---
+
 ## ⚠️ Limitations
 
 It is recommand to run those test with PostgreSql as SQLite has limitation
@@ -58,4 +85,4 @@ It is recommand to run those test with PostgreSql as SQLite has limitation
 
 ---
 
-_Last updated: July 27, 2025_
+_Last updated: July 30, 2025_

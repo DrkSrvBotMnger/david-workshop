@@ -6,6 +6,7 @@ import bot.crud.events_crud
 
 @pytest.mark.crud
 @pytest.mark.basic
+@pytest.mark.event
 def test_create_event(test_session,seed_user_and_event):
     event = seed_user_and_event(test_session)
     assert event.event_id == "test_event"
@@ -18,6 +19,7 @@ def test_create_event(test_session,seed_user_and_event):
 
 @pytest.mark.crud
 @pytest.mark.basic
+@pytest.mark.event
 def test_get_event(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     event = bot.crud.events_crud.get_event(test_session, "test_event")
@@ -27,6 +29,7 @@ def test_get_event(test_session,seed_user_and_event):
 
 @pytest.mark.crud
 @pytest.mark.basic
+@pytest.mark.event
 def test_update_event(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     modified_at = str(datetime.utcnow())
@@ -48,6 +51,7 @@ def test_update_event(test_session,seed_user_and_event):
 
 @pytest.mark.crud
 @pytest.mark.basic
+@pytest.mark.event
 def test_delete_event(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     deleted = bot.crud.events_crud.delete_event(
@@ -63,6 +67,7 @@ def test_delete_event(test_session,seed_user_and_event):
 
 @pytest.mark.crud
 @pytest.mark.basic
+@pytest.mark.event
 def test_get_all_events(test_session,seed_user_and_event):
     seed_user_and_event(test_session, event_id="event1")
     seed_user_and_event(test_session, event_id="event2")
@@ -73,6 +78,7 @@ def test_get_all_events(test_session,seed_user_and_event):
 
 @pytest.mark.crud
 @pytest.mark.basic
+@pytest.mark.event
 def test_get_all_event_logs(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.events_crud.update_event(

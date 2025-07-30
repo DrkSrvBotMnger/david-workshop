@@ -9,13 +9,12 @@ from db.database import db_session
 from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID
 from discord import Interaction, Embed
 from datetime import datetime
-from bot.commands.admin.admin_root import admin_group
 
 
-class AdminEventCommands(commands.Cog):
+class AdminEventCommands(commands.GroupCog, name="admin_event"):
+    """Admin commands for managing events."""
     def __init__(self, bot):
         self.bot = bot
-
 
     ## Event management commands
     # === CREATE EVENT ===
@@ -34,7 +33,7 @@ class AdminEventCommands(commands.Cog):
         priority="Order to display in listings (higher = higher)",
         shop_section_id="Shop category ID tied to this event"
         )
-    @admin_group.command(name="createevent", description="Create a new event.")
+    @app_commands.command(name="create", description="Create a new event.")
     async def create_event(
         self,
         interaction: discord.Interaction,
@@ -149,7 +148,7 @@ class AdminEventCommands(commands.Cog):
         shop_section_id="New shop category ID (use CLEAR to remove)",
         reason="Optional reason for editing (will be logged)"
     )
-    @admin_group.command(name="editevent", description="Edit an existing event's metadata.")
+    @app_commands.command(name="edit", description="Edit an existing event's metadata.")
     async def edit_event(
         self,
         interaction: discord.Interaction,
@@ -268,7 +267,7 @@ class AdminEventCommands(commands.Cog):
         event_id="ID of the event to delete",
         reason="Reason for deleting (will be logged)"
     )
-    @admin_group.command(name="deleteevent", description="Delete an event.")
+    @app_commands.command(name="delete", description="Delete an event.")
     async def delete_event(
         self, 
         interaction: discord.Interaction, 
@@ -315,7 +314,7 @@ class AdminEventCommands(commands.Cog):
     @app_commands.describe(
         event_id="Id of the event to show"
     )
-    @admin_group.command(name="displayevent", description="Make an event visible to users.")
+    @app_commands.command(name="display", description="Make an event visible to users.")
     async def display_event(
         self, 
         interaction: Interaction, 
@@ -377,7 +376,7 @@ class AdminEventCommands(commands.Cog):
     @app_commands.describe(
         event_id="ID of the event to activate (starts tracking and shows rewards)"
     )
-    @admin_group.command(name="activateevent", description="Mark an event as active (and visible if needed).")
+    @app_commands.command(name="activate", description="Mark an event as active (and visible if needed).")
     async def activate_event(
         self, 
         interaction: discord.Interaction, 
@@ -445,7 +444,7 @@ class AdminEventCommands(commands.Cog):
     @app_commands.describe(
         event_id="ID of the event to deactivate (ends tracking and disables rewards)"
     )
-    @admin_group.command(name="deactivateevent", description="Mark an event as inactive (tracking ends, still visible).")
+    @app_commands.command(name="deactivate", description="Mark an event as inactive (tracking ends, still visible).")
     async def deactivate_event(
         self, 
         interaction: discord.Interaction, 
@@ -497,7 +496,7 @@ class AdminEventCommands(commands.Cog):
     # === HIDE EVENT ===
     @admin_or_mod_check()
     @app_commands.describe(event_id="ID of the event to hide (removes from public views)")
-    @admin_group.command(name="hideevent", description="Hide an event from users (must not be active).")
+    @app_commands.command(name="hide", description="Hide an event from users (must not be active).")
     async def hide_event(self, interaction: discord.Interaction, event_id: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
@@ -541,7 +540,7 @@ class AdminEventCommands(commands.Cog):
         visible="Only show visible events",
         mod_name="Only show events created or edited by this mod"
     )
-    @admin_group.command(name="listevents", description="List all events with filters")
+    @app_commands.command(name="list", description="List all events with filters")
     async def list_events(
         self,
         interaction: Interaction,
@@ -594,7 +593,7 @@ class AdminEventCommands(commands.Cog):
     @app_commands.describe(
         event_id="ID of the event to show in detail"
     )
-    @admin_group.command(name="showevent", description="Display full metadata of a specific event.")
+    @app_commands.command(name="show", description="Display full metadata of a specific event.")
     async def show_event(self, interaction: Interaction, event_id: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
@@ -644,11 +643,11 @@ class AdminEventCommands(commands.Cog):
 
     # === EVENT LOGS ===
     @admin_or_mod_check()
-    @admin_group.command(name="eventlog", description="Show logs of event creation, edits, and deletion.")
     @app_commands.describe(
         action="Filter by action type (create, edit, delete)",
         moderator="Filter by moderator (optional)"
     )
+    @app_commands.command(name="logs", description="Show logs of event creation, edits, and deletion.")
     async def eventlog(
         self,
         interaction: discord.Interaction,
@@ -697,4 +696,3 @@ class AdminEventCommands(commands.Cog):
 # === Setup Function ===
 async def setup(bot):
     await bot.add_cog(AdminEventCommands(bot))
-

@@ -16,6 +16,7 @@ def mock_interaction():
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_success_message(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -49,6 +50,7 @@ async def test_create_event_success_message(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_invalid_start_date(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -76,6 +78,7 @@ async def test_create_event_invalid_start_date(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_invalid_end_date(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -103,6 +106,7 @@ async def test_create_event_invalid_end_date(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_duplicate_event_id(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -132,6 +136,7 @@ async def test_create_event_duplicate_event_id(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_default_coordinator_embed_event_id(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -165,6 +170,7 @@ async def test_create_event_default_coordinator_embed_event_id(mock_interaction)
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_embed_channel_argument(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -198,6 +204,7 @@ async def test_create_event_embed_channel_argument(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_tags_trimmed(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -228,6 +235,7 @@ async def test_create_event_tags_trimmed(mock_interaction):
 
 
 @pytest.mark.admin
+@pytest.mark.event
 @pytest.mark.asyncio 
 async def test_create_event_invalid_priority(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
@@ -256,6 +264,7 @@ async def test_create_event_invalid_priority(mock_interaction):
 
 @pytest.mark.admin
 @pytest.mark.basic
+@pytest.mark.event
 @pytest.mark.asyncio
 async def test_create_event_logs_action(mock_interaction):
     admin_cmds = AdminEventCommands(bot=None)
