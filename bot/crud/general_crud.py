@@ -1,5 +1,5 @@
-from db.schema import EventLog
 from datetime import datetime
+from db.schema import EventLog
 
 
 ## Internal functions

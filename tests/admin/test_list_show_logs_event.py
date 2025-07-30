@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch, MagicMock
 from bot.commands.admin.events_admin import AdminEventCommands, EVENTS_PER_PAGE
 
 

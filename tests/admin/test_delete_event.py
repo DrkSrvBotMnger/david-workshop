@@ -1,7 +1,7 @@
-import os
 import pytest
-from sqlalchemy import create_engine
+import os
 from db.schema import Base
+from sqlalchemy import create_engine
 from unittest.mock import AsyncMock, patch
 from bot.commands.admin.events_admin import AdminEventCommands
 

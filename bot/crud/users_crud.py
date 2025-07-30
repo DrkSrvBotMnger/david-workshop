@@ -1,5 +1,5 @@
-from db.schema import User
 from datetime import datetime
+from db.schema import User
 
 
 # Create or fetch existing user

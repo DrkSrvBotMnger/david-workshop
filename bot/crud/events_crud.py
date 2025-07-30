@@ -1,9 +1,7 @@
-from db.schema import Event
-from db.schema import EventLog
 from datetime import datetime
-from bot.crud import general_crud
 from sqlalchemy import or_
-
+from bot.crud import general_crud
+from db.schema import Event, EventLog
 
 # Check existing events
 def get_event(session, event_id):

@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime
-import bot.crud.users_crud
 import bot.crud.events_crud
+import bot.crud.users_crud
 
 
 @pytest.mark.crud

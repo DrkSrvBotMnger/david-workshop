@@ -1,7 +1,7 @@
+import os
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from contextlib import contextmanager
-import os
 
 # Manual control via DB_MODE
 mode = os.getenv("DB_MODE", "dev").lower()

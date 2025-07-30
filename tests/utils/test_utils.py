@@ -1,5 +1,5 @@
-import pytest
 import discord
+import pytest
 from bot.utils import safe_parse_date, format_discord_timestamp, format_log_entry, EmbedPaginator
 
 

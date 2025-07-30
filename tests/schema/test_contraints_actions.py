@@ -1,8 +1,8 @@
 import pytest
-from sqlalchemy.exc import IntegrityError
-from bot.crud.actions_crud import create_action, get_all_actions, get_action_by_key
-from db.database import db_session
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from bot.crud.actions_crud import create_action, get_action_by_key
+from db.database import db_session
 from db.schema import Action
 
 

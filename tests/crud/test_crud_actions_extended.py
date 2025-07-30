@@ -1,8 +1,7 @@
 import pytest
-from bot.crud.actions_crud import create_action, get_action_by_key, get_all_actions, delete_action
 from db.database import db_session
-from datetime import datetime
 from db.schema import Action
+from bot.crud.actions_crud import create_action, get_action_by_key
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 import pytest
+from datetime import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 from bot.commands.admin.actions_admin import AdminActionCommands, ACTIONS_PER_PAGE
-from datetime import datetime
 
 
 def make_mock_action(**kwargs):

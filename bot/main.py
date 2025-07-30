@@ -1,8 +1,8 @@
-import discord
-from discord.ext import commands
 import asyncio
+import discord
 import os
 from discord import app_commands
+from discord.ext import commands
 
 class MyBot(commands.Bot):
     async def setup_hook(self):

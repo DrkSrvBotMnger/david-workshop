@@ -1,13 +1,13 @@
-import os
 import pytest
-from sqlalchemy import create_engine
+import os
+from datetime import datetime
 from db.schema import Base
+from sqlalchemy import create_engine
 from unittest.mock import AsyncMock, MagicMock, patch
-from bot.commands.admin.events_admin import AdminEventCommands
 import bot.crud.events_crud
+from bot.commands.admin.events_admin import AdminEventCommands
 from db.database import db_session
 from db.schema import Event
-from datetime import datetime
 
 # Engine pointing to your test DB
 engine = create_engine(os.environ["DATABASE_URL_TEST"])

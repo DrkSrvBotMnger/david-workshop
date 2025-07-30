@@ -1,9 +1,9 @@
 import pytest
 import sqlalchemy.exc
-import bot.crud.users_crud
-import bot.crud.events_crud
 from datetime import datetime
 from db.schema import EventLog
+import bot.crud.users_crud
+import bot.crud.events_crud
 
 
 @pytest.mark.schema
