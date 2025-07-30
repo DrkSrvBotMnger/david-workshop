@@ -9,7 +9,6 @@ def make_mock_action(**kwargs):
     action = MagicMock()
     action.action_key = kwargs.get("action_key", "submit_fic")
     action.description = kwargs.get("description", "Submit a fic")
-    action.default_self_reportable = kwargs.get("default_self_reportable", True)
     action.input_fields_json = kwargs.get("input_fields_json", '["url", "text_value"]')
     action.active = kwargs.get("active", True)
     action.created_at = kwargs.get("created_at", datetime.utcnow())

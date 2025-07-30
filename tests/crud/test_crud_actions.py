@@ -24,8 +24,7 @@ def test_create_and_get_action(session):
         session=session,
         action_key=action_key,
         description="Test action",
-        default_self_reportable=True,
-        input_fields_json='["url"]',
+        input_fields_json='["url"]'
     )
 
     action = get_action_by_key(session, action_key)
@@ -41,8 +40,7 @@ def test_create_action_sets_timestamp(session):
     create_action(
         session=session,
         action_key="timestamp_test",
-        description="Timestamp test",
-        default_self_reportable=True
+        description="Timestamp test"
     )
     action = get_action_by_key(session, "timestamp_test")
     assert action is not None
@@ -68,8 +66,7 @@ def test_delete_action(session):
     create_action(
         session=session,
         action_key=action_key,
-        description="Temp action",
-        default_self_reportable=True
+        description="Temp action"
     )
 
     assert get_action_by_key(session, action_key) is not None
@@ -95,8 +92,7 @@ def test_get_action_by_id(session):
     create_action(
         session=session,
         action_key="id_lookup",
-        description="Lookup by ID",
-        default_self_reportable=True
+        description="Lookup by ID"
     )
     action = get_action_by_key(session, "id_lookup")
     retrieved = get_action_by_id(session, action.id)

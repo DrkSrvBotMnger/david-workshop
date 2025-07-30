@@ -22,7 +22,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     @app_commands.describe(
         action_key="Short unique key for the action (lowercase, underscores only, e.g. submit_fic)",
         description="Description of what this action is for",
-        default_self_reportable="Can users self-report this action by default? (true/false)",
         input_fields=f"Optional: comma-separated list of allowed fields ({', '.join(ALLOWED_ACTION_INPUT_FIELDS)})"
     )
     async def create_action(
@@ -30,7 +29,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         interaction: discord.Interaction,
         action_key: str,
         description: str,
-        default_self_reportable: bool = True,
         input_fields: str = ""
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
@@ -67,7 +65,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                 session=session,
                 action_key=action_key,
                 description=description,
-                default_self_reportable=default_self_reportable,
                 input_fields_json=input_fields_json
             )
 
@@ -76,7 +73,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             f"✅ **Action Created**\n"
             f"**Key:** `{action_key}`\n"
             f"**Description:** {description}\n"
-            f"**Self-reportable:** {'Yes' if default_self_reportable else 'No'}\n"
             f"**Input fields:** {', '.join(json.loads(input_fields_json)) if input_fields_json else 'None'}",
             ephemeral=True
         )
@@ -207,7 +203,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                 parsed_actions.append({
                     "key": action.action_key,
                     "desc": desc,
-                    "self_report": action.default_self_reportable,
                     "input_fields": input_fields,
                     "active": action.active
                 })
@@ -240,7 +235,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     
                 value = (
                     f"📜 {action['desc']}\n"
-                    f"👤 Self‑reportable: {'✅' if action['self_report'] else '❌'}\n"
                     f"📦 Input fields: {input_fields_str}"
                 )
                 if show_inactive:

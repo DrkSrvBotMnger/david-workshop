@@ -22,7 +22,6 @@ def test_create_action_accepts_null_input_fields(session):
         session=session,
         action_key="null_test",
         description="Test null input fields",
-        default_self_reportable=True,
         input_fields_json=None
     )
     action = get_action_by_key(session, "null_test")

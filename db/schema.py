@@ -92,8 +92,8 @@ class Inventory(Base):
     equipped = Column(Boolean, default=False)
 
     user = relationship("User", backref="inventory")
-    reward = relationship("Rewards", backref="owned_by")										
-    source_event = relationship("Event", backref="event_rewards")
+    reward = relationship("Reward", backref="owned_by")										
+    source_event = relationship("Event", backref="reward_events")
 
     def __repr__(self):
         return f"<Inventory user_id={self.user_id} reward_id={self.reward_id} quantity={self.quantity}>"
@@ -139,7 +139,6 @@ class Action(Base):
     action_key = Column(String, unique=True, nullable=False)  # e.g. "submit_fic", "comment_fics"
     active = Column(Boolean, default=True, nullable=False)
     description = Column(Text, nullable=False)
-    default_self_reportable = Column(Boolean, default=True, nullable=False)
 
     input_fields_json = Column(Text, nullable=True)  # Optional: expected fields (["url"], etc.)
 
@@ -159,20 +158,23 @@ class ActionEventConfig(Base):
     action_id = Column(Integer, ForeignKey('actions.id', ondelete="CASCADE"), nullable=False)
     event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)
 
-    points_granted = Column(Integer, default=0)
-    reward_granted = Column(String, nullable=True)
-    self_reportable = Column(Boolean, nullable=True)  # If None, use action default
+    points_granted = Column(Integer, default=0, nullable=False)
+    reward_event_id = Column(Integer, ForeignKey('reward_events.id', ondelete="SET NULL"), nullable=True)
+    self_reportable = Column(Boolean, nullable=False, default=True)
 
     input_help_text = Column(Text, nullable=True)  # Per-event user guidance for input
 
     action = relationship("Action", backref="event_configs")
     event = relationship("Event", backref="action_configs")
+    reward_event = relationship("RewardEvent", backref="action_grants")
 
     created_by = Column(String)   
     created_at = Column(String) 
 
     def __repr__(self):
-        return f"<ActionEventConfig action_id={self.action_id} event_id={self.event_id} points={self.points_granted}>"
+        return (f"<ActionEventConfig action_id={self.action_id} event_id={self.event_id} "
+                f"points={self.points_granted} reward_event_id={self.reward_event_id}>")
+
 
 
 # Logs individual actions performed by users.
@@ -206,7 +208,7 @@ class UserAction(Base):
 
 # Rewards available: titles, badges, or items.
 # Shows stackability of items and the number of rewards distributed to users.
-class Rewards(Base):
+class Reward(Base):
     __tablename__ = 'rewards'
 
     id = Column(Integer, primary_key=True)
@@ -225,7 +227,7 @@ class Rewards(Base):
     created_at = Column(String)
 
     def __repr__(self):
-        return f"<Rewards(reward_id='{self.reward_id}', type='{self.reward_type}', name='{self.reward_name}')>"
+        return f"<Reward(reward_id='{self.reward_id}', type='{self.reward_type}', name='{self.reward_name}')>"
 
 
 # Logs changes to rewards by moderators.
@@ -239,7 +241,7 @@ class RewardLog(Base):
     timestamp = Column(String)  # ISO timestamp
     description = Column(Text, nullable=True)  # Optional metadata (reason, changes, etc.)
 
-    reward = relationship("Rewards", backref="change_logs")
+    reward = relationship("Reward", backref="change_logs")
 
     def __repr__(self):
         return f"<RewardLog reward_id={self.reward_id} action={self.action} performed_by={self.performed_by}>"
@@ -247,19 +249,16 @@ class RewardLog(Base):
 
 # Links rewards to events.
 # Determines if reward is sold in shop or granted by performing an action.
-class EventReward(Base):
-    __tablename__ = 'event_rewards'
+class RewardEvent(Base):
+    __tablename__ = 'reward_events'
 
     id = Column(Integer, primary_key=True)
     event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)
     reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)
 
-
-
     availability = Column(String, nullable=False, default="inshop")	# 'inshop' or 'onaction'
 
     price = Column(Integer, nullable=False, default=0)	# Used if availability == 'inshop'
-    actionevent_id = Column(Integer, ForeignKey('action_event_configs.id', ondelete="SET NULL"), nullable=True)	# Used if availability == 'onaction'
 
     def __repr__(self):
-        return f"<EventReward(event_id={self.event_id}, reward_id={self.reward_id}, availability={self.availability})>"
+        return f"<RewardEvent(event_id={self.event_id}, reward_id={self.reward_id}, availability={self.availability})>"

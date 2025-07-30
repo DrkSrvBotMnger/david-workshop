@@ -25,7 +25,6 @@ def test_action_key_required(session):
             session=session,
             action_key=None,
             description="Missing key",
-            default_self_reportable=True,
             input_fields_json=None
         )
         session.flush()
@@ -40,16 +39,14 @@ def test_action_key_unique(session):
     create_action(
         session=session,
         action_key="unique_test",
-        description="First action",
-        default_self_reportable=True
+        description="First action"
     )
 
     with pytest.raises(IntegrityError):
         create_action(
             session=session,
             action_key="unique_test",  # duplicate
-            description="Duplicate action",
-            default_self_reportable=True
+            description="Duplicate action"
         )
         session.flush()
     session.rollback()
@@ -64,24 +61,10 @@ def test_description_required(session):
         create_action(
             session=session,
             action_key="no_desc",
-            description=None,
-            default_self_reportable=True
+            description=None
         )
         session.flush()
     session.rollback()
-
-
-@pytest.mark.schema
-@pytest.mark.action
-def test_default_self_reportable_defaults_true(session):
-    """Default self_reportable should be True if not set."""
-    create_action(
-        session=session,
-        action_key="default_test",
-        description="Default test"
-    )
-    action = get_all_actions(session)[-1]
-    assert action.default_self_reportable is True
 
 
 @pytest.mark.schema
@@ -91,8 +74,7 @@ def test_input_fields_json_can_be_null(session):
     create_action(
         session=session,
         action_key="null_fields",
-        description="Null fields test",
-        default_self_reportable=True
+        description="Null fields test"
     )
     action = get_action_by_key(session, "null_fields")
     assert action is not None
@@ -106,8 +88,8 @@ def test_created_at_required(session):
     """created_at must be provided (NOT NULL)."""
     with pytest.raises(IntegrityError):
         session.execute(text("""
-            INSERT INTO actions (action_key, active, description, default_self_reportable)
-            VALUES ('bad_created_at', True, 'Missing created_at', True)
+            INSERT INTO actions (action_key, active, description)
+            VALUES ('bad_created_at', True, 'Missing created_at')
         """))
         session.commit()
 
@@ -119,7 +101,7 @@ def test_active_required(session):
     """created_at must be provided (NOT NULL)."""
     with pytest.raises(IntegrityError):
         session.execute(text("""
-            INSERT INTO actions (action_key, description, default_self_reportable, created_at)
-            VALUES ('bad_active', 'Missing created_at', True, '2023-01-01T00:00:00')
+            INSERT INTO actions (action_key, description, created_at)
+            VALUES ('bad_active', 'Missing created_at', '2023-01-01T00:00:00')
         """))
         session.commit()

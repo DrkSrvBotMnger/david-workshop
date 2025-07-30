@@ -29,7 +29,6 @@ async def test_create_action_success(mock_interaction):
             mock_interaction,
             action_key="submit_fic",
             description="Submit a fanfiction",
-            default_self_reportable=True,
             input_fields="url,text_value"
         )
 
