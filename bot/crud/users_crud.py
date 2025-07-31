@@ -1,20 +1,21 @@
-from datetime import datetime
+from bot.utils import now_iso
 from db.schema import User
 
 
-# Create or fetch existing user
+# --- CREATE OR GET ---
 def get_or_create_user(session, discord_id, username=None):
     user = session.query(User).filter_by(discord_id=discord_id).first()
     if not user:
         user = User(
             discord_id=discord_id,
             username=username,
-            created_at=str(datetime.utcnow())
+            created_at=now_iso()
         )
         session.add(user)
     return user
 
-# Update user profile
+
+# --- UPDATE ---
 def update_user(session, discord_id, display_name=None, nickname=None):
     user = session.query(User).filter_by(discord_id=discord_id).first()
     if not user:
@@ -25,15 +26,16 @@ def update_user(session, discord_id, display_name=None, nickname=None):
     if nickname:
         user.nickname = nickname
 
-    user.modified_at = str(datetime.utcnow())
+    user.modified_at = now_iso()
     return user
 
 
-# Fetch user profile
+# --- GET ---
 def get_user(session, discord_id):
     return session.query(User).filter_by(discord_id=discord_id).first()
 
 
+# --- VALIDATE ---
 def action_is_used(session, action_id: int) -> bool:
     """Return True if any UserAction references this action_key."""
     from db.schema import UserAction

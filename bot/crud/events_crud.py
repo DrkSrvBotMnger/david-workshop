@@ -1,13 +1,10 @@
-from datetime import datetime
 from sqlalchemy import or_
 from bot.crud import general_crud
+from bot.utils import now_iso
 from db.schema import Event, EventLog
 
-# Check existing events
-def get_event(session, event_id):
-    return session.query(Event).filter_by(event_id=event_id).first()
 
-# Create an event and log the creation
+# --- CREATE ---
 def create_event(
     session,
     event_id,
@@ -35,7 +32,7 @@ def create_event(
         start_date=start_date,
         end_date=end_date,
         created_by=created_by,
-        created_at=str(datetime.utcnow()),
+        created_at=now_iso(),
         modified_by=None,
         modified_at=None,
         active=active,
@@ -66,7 +63,7 @@ def create_event(
     return event
 
 
-# Edit event and log the change
+# --- UPDATE ---
 def update_event(
     session, 
     event_id, 
@@ -102,7 +99,7 @@ def update_event(
     return event
 
 
-# Delete event and log the deletion
+# --- DELETE ---
 def delete_event(
     session, 
     event_id, 
@@ -130,6 +127,12 @@ def delete_event(
     return True
 
 
+# --- GET ---
+def get_event(session, event_id):
+    return session.query(Event).filter_by(event_id=event_id).first()
+
+    
+# --- LIST ---
 def get_all_events(session, tag=None, active=None, visible=None, mod_id=None):
     """
     Retrieve events with optional filters.
@@ -152,6 +155,7 @@ def get_all_events(session, tag=None, active=None, visible=None, mod_id=None):
     return query.order_by(Event.modified_at.desc().nullslast(), Event.created_at.desc()).all()
 
 
+# --- LIST LOGS ---
 def get_event_logs(session, action=None, performed_by=None):
     """
     Retrieve event logs with optional filters.
@@ -166,4 +170,3 @@ def get_event_logs(session, action=None, performed_by=None):
         query = query.filter(EventLog.performed_by == performed_by)
 
     return query.order_by(EventLog.timestamp.desc()).all()
-

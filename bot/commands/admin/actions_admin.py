@@ -1,13 +1,12 @@
 import discord
 import json
-from datetime import datetime
 from discord import app_commands
 from discord.ext import commands
 from typing import Optional
 from bot.crud.actions_crud import create_action as crud_create_action, get_action_by_key, get_all_actions
 from bot.crud.users_crud import action_is_used
 from bot.config import ALLOWED_ACTION_INPUT_FIELDS, ACTIONS_PER_PAGE
-from bot.utils import admin_or_mod_check, paginate_embeds
+from bot.utils import admin_or_mod_check, paginate_embeds, now_iso
 from db.database import db_session
 
 
@@ -149,7 +148,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             # Update record
             action.action_key = candidate_key
             action.active = False
-            action.deactivated_at = datetime.utcnow().isoformat()
+            action.deactivated_at = now_iso()
             session.commit()
 
         await interaction.followup.send(
@@ -187,7 +186,8 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             actions = get_all_actions(
                 session,
                 active=None if show_inactive else True,
-                key_search=search_key
+                key_search=search_key,
+                order_by="key"  # alphabetical for UI display
             )
     
             parsed_actions = []
@@ -209,8 +209,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     "active": action.active
                 })
     
-        parsed_actions.sort(key=lambda a: a["key"].lower())
-    
         if not parsed_actions:
             await interaction.followup.send("ℹ️ No actions found with the current filters.", ephemeral=True)
             return
@@ -219,11 +217,9 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         pages = []
         for i in range(0, len(parsed_actions), ACTIONS_PER_PAGE):
             chunk = parsed_actions[i:i + ACTIONS_PER_PAGE]
-            description_text = (
-                "🟢 Active | 🔴 Inactive\nUse the **Action Key** when linking to an event.\n"
-                if show_inactive else
-                "Use the **Action Key** when linking to an event.\n"
-            )
+            description_text = "Use the **Action Key** when linking to an event.\n"
+            description_text += "🟢 Active | 🔴 Inactive\n" if show_inactive else ""
+            description_text += f"🔍 Search: `{search_key}`" if search_key else "🔍 No search filter"
             embed = discord.Embed(
                 title=f"📋 Global Actions ({i+1}-{i+len(chunk)}/{len(parsed_actions)})",
                 description=description_text,

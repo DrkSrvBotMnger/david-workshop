@@ -5,7 +5,7 @@ from discord.ext import commands
 from typing import Optional
 from bot.crud import events_crud, general_crud
 from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
-from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry
+from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, now_iso
 from db.database import db_session
 from db.schema import EventLog
 
@@ -243,7 +243,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 session,
                 event_id=event_id,
                 modified_by=str(interaction.user.id),
-                modified_at=str(datetime.utcnow()),
+                modified_at=now_iso(),
                 reason=reason,
                 **updates
             )
@@ -342,7 +342,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             
             # Track who modified the event
             event.modified_by = str(interaction.user.id)
-            event.modified_at = str(datetime.utcnow())
+            event.modified_at = now_iso()
             
             general_crud.log_change(
                 session=session,
@@ -411,7 +411,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
             # Track who modified the event
             event.modified_by = str(interaction.user.id)
-            event.modified_at = str(datetime.utcnow())
+            event.modified_at = now_iso()
             
             # Logging
             visibility_note = " (also made visible automatically)" if not was_visible else ""
@@ -470,7 +470,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
             # Track who modified the event
             event.modified_by = str(interaction.user.id)
-            event.modified_at = str(datetime.utcnow())
+            event.modified_at = now_iso()
     
             general_crud.log_change(
                 session=session,
@@ -523,7 +523,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
             # Track who modified the event
             event.modified_by = str(interaction.user.id)
-            event.modified_at = str(datetime.utcnow())
+            event.modified_at = now_iso()
     
             general_crud.log_change(
                 session=session,
@@ -575,7 +575,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             pages = []
             for i in range(0, len(events), EVENTS_PER_PAGE):
                 chunk = events[i:i+EVENTS_PER_PAGE]
-                embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})")
+                description_text = f"🔍 Tag: `{tag}`\n" if tag else None
+                embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})", description=description_text)
                 for e in chunk:
                     updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
                     formatted_time = format_discord_timestamp(e.modified_at or e.created_at)

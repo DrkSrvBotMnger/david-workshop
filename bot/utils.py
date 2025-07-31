@@ -1,9 +1,25 @@
 import discord
-from datetime import datetime
+from datetime import datetime, timezone
 from discord import Interaction, ui
 from discord.ui import View, Button
 from typing import Optional
 from bot.config import MOD_ROLE_IDS
+
+
+def now_iso():
+    """
+    Returns current UTC time in ISO 8601 format with timezone offset.
+    Example: '2025-07-30T14:35:22+00:00'
+    """
+    return datetime.now(timezone.utc).isoformat()
+
+
+def now_unix():
+    """
+    Current UTC time as Unix timestamp (int).
+    Example: '1753971557'
+    """
+    return int(datetime.now(timezone.utc).timestamp())
 
 
 # Parse common date strings into YYYY-MM-DD format
@@ -25,6 +41,7 @@ def format_discord_timestamp(iso_str, style="F"):
         return f"<t:{unix_ts}:{style}>"
     except Exception:
         return iso_str
+
 
 # Check if user is a member of the moderator roles definied in config.py
 async def is_admin_or_mod(interaction: Interaction) -> bool:
