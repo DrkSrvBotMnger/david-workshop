@@ -104,30 +104,32 @@ async def test_eventlog_sorted_most_recent_first_and_pagination_priority():
 
     # Create fake logs: (log_obj, event_id)
     log1 = MagicMock()
+    log1.event_id = "event1"
     log1.action = "edit"
     log1.performed_by = "123"
     log1.timestamp = datetime.utcnow()
     log1.description = "Latest log"
 
     log2 = MagicMock()
+    log2.event_id = "event2"
     log2.action = "create"
     log2.performed_by = "123"
     log2.timestamp = datetime.utcnow() - timedelta(days=1)
     log2.description = "Older log"
 
-    logs = [(log1, "event1"), (log2, "event2")]
+    logs = [log1, log2]
 
-    with patch("bot.crud.events_crud.get_all_event_logs", return_value=logs), \
+    with patch("bot.crud.events_crud.get_event_logs", return_value=logs), \
          patch("db.database.db_session") as mock_db, \
          patch("bot.commands.admin.events_admin.paginate_embeds", new_callable=AsyncMock) as mock_paginate:
         mock_db.return_value.__enter__.return_value = MagicMock()
 
         admin_cmds = AdminEventCommands(bot=None)
-        await admin_cmds.eventlog.callback(admin_cmds, mock_interaction)
+        await admin_cmds.event_logs.callback(admin_cmds, mock_interaction)
 
         # Pagination called
         assert mock_paginate.called
 
         # Ensure sorted order — latest first
-        sorted_logs = sorted(logs, key=lambda l: l[0].timestamp, reverse=True)
+        sorted_logs =  sorted(logs, key=lambda l: l.timestamp, reverse=True)
         assert logs == sorted_logs

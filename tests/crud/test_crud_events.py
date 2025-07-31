@@ -79,7 +79,7 @@ def test_get_all_events(test_session,seed_user_and_event):
 @pytest.mark.crud
 @pytest.mark.basic
 @pytest.mark.event
-def test_get_all_event_logs(test_session,seed_user_and_event):
+def test_get_event_logs(test_session,seed_user_and_event):
     seed_user_and_event(test_session)
     bot.crud.events_crud.update_event(
         session=test_session,
@@ -95,8 +95,8 @@ def test_get_all_event_logs(test_session,seed_user_and_event):
         deleted_by="5678",
         reason="Testing deletion"
     )
-    logs = bot.crud.events_crud.get_all_event_logs(test_session)
+    logs = bot.crud.events_crud.get_event_logs(test_session)
     assert len(logs) >= 2  # 1 create + 1 edit
-    assert any(log.EventLog.action == "create" for log in logs)
-    assert any(log.EventLog.action == "edit" for log in logs)
-    assert any(log.EventLog.action == "delete" for log in logs)
+    assert any(log.action == "create" for log in logs)
+    assert any(log.action == "edit" for log in logs)
+    assert any(log.action == "delete" for log in logs)

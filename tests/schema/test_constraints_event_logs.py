@@ -102,6 +102,6 @@ def test_eventlog_event_id_set_null_on_delete(test_session):
         reason="Clean up"
     )
 
-    logs = bot.crud.events_crud.get_all_event_logs(test_session)
+    logs = bot.crud.events_crud.get_event_logs(test_session)
     assert len(logs) >= 2
-    assert all(log.EventLog.event_id is None for log in logs)
+    assert all(log.event_id is None for log in logs)

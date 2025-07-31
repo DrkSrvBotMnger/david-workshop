@@ -124,8 +124,8 @@ def test_update_event_logs_reason(test_session, seed_user_and_event):
         name="Fixed Name"
     )
 
-    logs = bot.crud.events_crud.get_all_event_logs(test_session)
-    edit_logs = [log.EventLog for log in logs if log.EventLog.action == "edit"]
+    logs = bot.crud.events_crud.get_event_logs(test_session)
+    edit_logs = [log for log in logs if log.action == "edit"]
 
     assert len(edit_logs) >= 1
     assert any(reason in log.description for log in edit_logs)
@@ -157,8 +157,8 @@ def test_delete_event_logs_reason(test_session, seed_user_and_event):
     )
     assert deleted is True
 
-    logs = bot.crud.events_crud.get_all_event_logs(test_session)
-    delete_logs = [log.EventLog for log in logs if log.EventLog.action == "delete"]
+    logs = bot.crud.events_crud.get_event_logs(test_session)
+    delete_logs = [log for log in logs if log.action == "delete"]
 
     assert len(delete_logs) >= 1
     assert any(reason in log.description for log in delete_logs)
@@ -361,9 +361,9 @@ def test_filter_event_logs_by_action(test_session, seed_user_and_event):
         name="Log Filter Test"
     )
 
-    logs = bot.crud.events_crud.get_all_event_logs(test_session, action="edit")
+    logs = bot.crud.events_crud.get_event_logs(test_session, action="edit")
     assert len(logs) == 1
-    assert logs[0].EventLog.action == "edit"
+    assert logs[0].action == "edit"
 
 
 @pytest.mark.crud
@@ -380,10 +380,10 @@ def test_filter_event_logs_by_moderator(test_session, seed_user_and_event):
         name="Updated Title"
     )
 
-    logs_all = bot.crud.events_crud.get_all_event_logs(test_session)
-    logs_by_mod = bot.crud.events_crud.get_all_event_logs(test_session, moderator="mod999")
-    logs_by_fake = bot.crud.events_crud.get_all_event_logs(test_session, moderator="ghost")
+    logs_all = bot.crud.events_crud.get_event_logs(test_session)
+    logs_by_mod = bot.crud.events_crud.get_event_logs(test_session, performed_by="mod999")
+    logs_by_fake = bot.crud.events_crud.get_event_logs(test_session, performed_by="ghost")
 
-    assert any(log.EventLog.performed_by == "mod999" for log in logs_by_mod)
+    assert any(log.performed_by == "mod999" for log in logs_by_mod)
     assert len(logs_by_fake) == 0
     assert len(logs_by_mod) <= len(logs_all)  # Should be a subset

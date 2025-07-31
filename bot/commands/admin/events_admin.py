@@ -544,7 +544,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         tag="Filter by tag (optional)",
         active="Only show active events",
         visible="Only show visible events",
-        mod_name="Only show events created or edited by this mod"
+        mod="Only show events created or edited by this mod"
     )
     @app_commands.command(name="list", description="List all events with filters")
     async def list_events(
@@ -553,11 +553,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         tag: Optional[str] = None,
         active: Optional[bool] = None,
         visible: Optional[bool] = None,
-        mod_name: Optional[discord.User] = None
+        mod: Optional[discord.User] = None,
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        mod_id = str(mod_name.id) if mod_name else None
+        mod_id = str(mod.id) if mod else None
 
         with db_session() as session:
             events = events_crud.get_all_events(
@@ -569,11 +569,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             )
 
         if not events:
-            await interaction.followup.send("❌ No events found with the given filters.", ephemeral=True)
+            await interaction.followup.send("❌ No events found with the given filters.")
             return
-
-        # Sort newest to oldest (in case of equal timestamps)
-        events.sort(key=lambda e: e.modified_at or e.created_at, reverse=True)
 
         pages = []
         for i in range(0, len(events), EVENTS_PER_PAGE):
@@ -582,17 +579,17 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             for e in chunk:
                 updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
                 formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
-
                 lines = [
                     f"**ID:** `{e.event_id}` | **Name:** {e.name}",
                     f"👤 Last updated by: {updated_by}",
                     f":timer: On: {formatted_time}",
                     f"🔎 Visible: {'✅' if e.visible else '❌'} | 🎉 Active: {'✅' if e.active else '❌'} | 📎 Embed: {'✅' if e.embed_message_id else '❌'} | 🎭 Role: {'✅' if e.role_id else '❌'}",
                 ]
-                embed.add_field(name="\u200b", value="\n".join(lines), inline=False)
+                embed.add_field(name="\n", value="\n".join(lines), inline=False)
             pages.append(embed)
 
         await paginate_embeds(interaction, pages)
+
 
 
     # === SHOW EVENT METADATA ===
@@ -655,36 +652,34 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         moderator="Filter by moderator (optional)"
     )
     @app_commands.command(name="logs", description="Show logs of event creation, edits, and deletion.")
-    async def eventlog(
+    async def event_logs(
         self,
         interaction: discord.Interaction,
         action: Optional[str] = None,
         moderator: Optional[discord.User] = None,
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
-    
-        moderator_id = str(moderator.id) if moderator else None
-    
+        
         with db_session() as session:
-            logs = events_crud.get_all_event_logs(
+            logs = events_crud.get_event_logs(
                 session,
                 action=action,
-                moderator=moderator_id
+                performed_by=str(moderator.id) if moderator else None
             )
     
         if not logs:
-            await interaction.followup.send("❌ No logs found with those filters.", ephemeral=True)
+            await interaction.followup.send("❌ No logs found with those filters.")
             return
     
-        embeds = []
+        pages = []
         for i in range(0, len(logs), LOGS_PER_PAGE):
             chunk = logs[i:i+LOGS_PER_PAGE]
             embed = discord.Embed(
                 title=f"📜 Event Logs ({i+1}-{i+len(chunk)}/{len(logs)})",
                 color=discord.Color.orange()
             )
-            for log, event_id_str in chunk:
-                label = f"Event `{event_id_str}`" if event_id_str else "Deleted Event"
+            for log in chunk:
+                label = f"Event `{log.event_id}`" if log.event_id else "Deleted Event"
                 entry_str = format_log_entry(
                     action=log.action,
                     performed_by=log.performed_by,
@@ -693,9 +688,9 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                     label=label
                 )
                 embed.add_field(name="\n", value=entry_str, inline=False)
-            embeds.append(embed)
+            pages.append(embed)
     
-        await paginate_embeds(interaction, embeds)
+        await paginate_embeds(interaction, pages)
 
 
 

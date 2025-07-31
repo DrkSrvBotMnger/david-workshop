@@ -128,15 +128,15 @@ def delete_event(
     )
     
     return True
- 
 
-def get_all_events(session, tag: str = None, active: bool = None, visible: bool = None, mod_id: str = None):
+
+def get_all_events(session, tag=None, active=None, visible=None, mod_id=None):
     """
     Retrieve events with optional filters.
     - tag: partial match on one of the tags
-    - active: True/False to filter by status active
-    - visible: True/False to filter by status visible
-    - moderator: Discord ID of moderator
+    - active: True/False to filter by status
+    - visible: True/False to filter by visibility
+    - mod_id: Discord ID of moderator
     """
     query = session.query(Event)
 
@@ -149,23 +149,21 @@ def get_all_events(session, tag: str = None, active: bool = None, visible: bool 
     if mod_id:
         query = query.filter(or_(Event.created_by == mod_id, Event.modified_by == mod_id))
 
-    return query.order_by(Event.created_at.desc()).all()
+    return query.order_by(Event.modified_at.desc().nullslast(), Event.created_at.desc()).all()
 
 
-def get_all_event_logs(session, action: str = None, moderator: str = None):
+def get_event_logs(session, action=None, performed_by=None):
     """
     Retrieve event logs with optional filters.
     - action: 'create', 'edit', 'delete'
-    - moderator: Discord ID of moderator
+    - performed_by: Discord ID of moderator
     """
-    query = (
-        session.query(EventLog, Event.event_id)
-        .outerjoin(Event, EventLog.event_id == Event.id)
-    )
+    query = session.query(EventLog)
 
     if action:
         query = query.filter(EventLog.action == action.lower())
-    if moderator:
-        query = query.filter(EventLog.performed_by == moderator)
+    if performed_by:
+        query = query.filter(EventLog.performed_by == performed_by)
 
     return query.order_by(EventLog.timestamp.desc()).all()
+
