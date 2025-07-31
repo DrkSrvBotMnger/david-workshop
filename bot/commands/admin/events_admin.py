@@ -568,27 +568,27 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 mod_id=mod_id
             )
 
-        if not events:
-            await interaction.followup.send("❌ No events found with the given filters.")
-            return
-
-        pages = []
-        for i in range(0, len(events), EVENTS_PER_PAGE):
-            chunk = events[i:i+EVENTS_PER_PAGE]
-            embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})")
-            for e in chunk:
-                updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
-                formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
-                lines = [
-                    f"**ID:** `{e.event_id}` | **Name:** {e.name}",
-                    f"👤 Last updated by: {updated_by}",
-                    f":timer: On: {formatted_time}",
-                    f"🔎 Visible: {'✅' if e.visible else '❌'} | 🎉 Active: {'✅' if e.active else '❌'} | 📎 Embed: {'✅' if e.embed_message_id else '❌'} | 🎭 Role: {'✅' if e.role_id else '❌'}",
-                ]
-                embed.add_field(name="\n", value="\n".join(lines), inline=False)
-            pages.append(embed)
-
-        await paginate_embeds(interaction, pages)
+            if not events:
+                await interaction.followup.send("❌ No events found with the given filters.")
+                return
+    
+            pages = []
+            for i in range(0, len(events), EVENTS_PER_PAGE):
+                chunk = events[i:i+EVENTS_PER_PAGE]
+                embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})")
+                for e in chunk:
+                    updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
+                    formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
+                    lines = [
+                        f"**ID:** `{e.event_id}` | **Name:** {e.name}",
+                        f"👤 Last updated by: {updated_by}",
+                        f":timer: On: {formatted_time}",
+                        f"🔎 Visible: {'✅' if e.visible else '❌'} | 🎉 Active: {'✅' if e.active else '❌'} | 📎 Embed: {'✅' if e.embed_message_id else '❌'} | 🎭 Role: {'✅' if e.role_id else '❌'}",
+                    ]
+                    embed.add_field(name="\n", value="\n".join(lines), inline=False)
+                pages.append(embed)
+    
+            await paginate_embeds(interaction, pages)
 
 
 
@@ -667,31 +667,30 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 performed_by=str(moderator.id) if moderator else None
             )
     
-        if not logs:
-            await interaction.followup.send("❌ No logs found with those filters.")
-            return
-    
-        pages = []
-        for i in range(0, len(logs), LOGS_PER_PAGE):
-            chunk = logs[i:i+LOGS_PER_PAGE]
-            embed = discord.Embed(
-                title=f"📜 Event Logs ({i+1}-{i+len(chunk)}/{len(logs)})",
-                color=discord.Color.orange()
-            )
-            for log in chunk:
-                label = f"Event `{log.event_id}`" if log.event_id else "Deleted Event"
-                entry_str = format_log_entry(
-                    action=log.action,
-                    performed_by=log.performed_by,
-                    timestamp=log.timestamp,
-                    description=log.description,
-                    label=label
+            if not logs:
+                await interaction.followup.send("❌ No logs found with those filters.")
+                return
+        
+            pages = []
+            for i in range(0, len(logs), LOGS_PER_PAGE):
+                chunk = logs[i:i+LOGS_PER_PAGE]
+                embed = discord.Embed(
+                    title=f"📜 Event Logs ({i+1}-{i+len(chunk)}/{len(logs)})",
+                    color=discord.Color.orange()
                 )
-                embed.add_field(name="\n", value=entry_str, inline=False)
-            pages.append(embed)
-    
-        await paginate_embeds(interaction, pages)
-
+                for log in chunk:
+                    label = f"Event `{log.event_id}`" if log.event_id else "Deleted Event"
+                    entry_str = format_log_entry(
+                        action=log.action,
+                        performed_by=log.performed_by,
+                        timestamp=log.timestamp,
+                        description=log.description,
+                        label=label
+                    )
+                    embed.add_field(name="\n", value=entry_str, inline=False)
+                pages.append(embed)
+        
+            await paginate_embeds(interaction, pages)
 
 
 # === Setup Function ===
