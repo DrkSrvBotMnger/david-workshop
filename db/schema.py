@@ -211,24 +211,32 @@ class Reward(Base):
     __tablename__ = 'rewards'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(String, unique=True, nullable=False)  # Internal unique code, required
-    reward_type = Column(String, nullable=False)  # 'title', 'badge', 'item'
-    reward_name = Column(String, nullable=False) 
-    description = Column(Text, nullable=True)   
+    reward_id = Column(String, unique=True, nullable=False)  # Internal unique code
+    reward_type = Column(String, nullable=False)  # 'title', 'badge', 'preset'
+    reward_name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
 
-    emoji = Column(String, nullable=True)         # For type 'badge'
-    media_url = Column(String, nullable=True)     # For type 'item'
-    stackable = Column(Boolean, default=False, nullable=False)  # Only for type 'item'
+    emoji = Column(String, nullable=True)  # For type 'badge'
 
-    number_granted = Column(Integer, default=0, nullable=False)  # Total distributed count
+    # Preset-specific
+    use_channel_id = Column(String, nullable=True)
+    use_message_id = Column(String, nullable=True)
+    use_header_message_id = Column(String, nullable=True)  # header message ID
+    stackable = Column(Boolean, default=False, nullable=False)
+
+    number_granted = Column(Integer, default=0, nullable=False)
 
     created_by = Column(String, nullable=False)
     created_at = Column(String, nullable=False)
     modified_by = Column(String, nullable=True)
     modified_at = Column(String, nullable=True)
 
+    # Preset publication tracking
+    preset_set_by = Column(String, nullable=True)
+    preset_set_at = Column(String, nullable=True)
+
     def __repr__(self):
-        return f"<Reward reward_id='{self.reward_id}' type='{self.reward_type}' name='{self.reward_name}'>"
+        return f"<Reward {self.reward_id} ({self.reward_type})>"
 
 
 # Logs changes to rewards by moderators.

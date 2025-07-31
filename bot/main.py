@@ -10,6 +10,7 @@ class MyBot(commands.Bot):
         admin_cogs = [
             "bot.commands.admin.events_admin",
             "bot.commands.admin.actions_admin",
+            "bot.commands.admin.rewards_admin",
         ]
         for cog in admin_cogs:
             try:
