@@ -550,47 +550,48 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
     async def list_events(
         self,
         interaction: Interaction,
-        tag: str = None,
-        active: bool = None,
-        visible: bool = None,
-        mod_name: discord.User = None
+        tag: Optional[str] = None,
+        active: Optional[bool] = None,
+        visible: Optional[bool] = None,
+        mod_name: Optional[discord.User] = None
     ):
-        
         await interaction.response.defer(thinking=True, ephemeral=True)
-        
+
+        mod_id = str(mod_name.id) if mod_name else None
+
         with db_session() as session:
-            events = events_crud.get_all_events(session)
-            
-            if tag:
-                events = [e for e in events if e.tags and tag.strip().lower() in [t.strip().lower() for t in e.tags.split(",")]]
+            events = events_crud.get_all_events(
+                session,
+                tag=tag,
+                active=active,
+                visible=visible,
+                mod_id=mod_id
+            )
 
-            if active is not None:
-                events = [e for e in events if e.active == active]
-            if visible is not None:
-                events = [e for e in events if e.visible == visible]
-            if mod_name:
-                uid = str(mod_name.id)
-                events = [e for e in events if e.created_by == uid or e.modified_by == uid]
+        if not events:
+            await interaction.followup.send("❌ No events found with the given filters.", ephemeral=True)
+            return
 
-            # Sort newest to oldest
-            events.sort(key=lambda e: e.modified_at or e.created_at, reverse=True)
-            
-            pages = []
-            for i in range(0, len(events), EVENTS_PER_PAGE):
-                chunk = events[i:i+EVENTS_PER_PAGE]
-                embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})")
-                for e in chunk:
-                    updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
-                    formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
+        # Sort newest to oldest (in case of equal timestamps)
+        events.sort(key=lambda e: e.modified_at or e.created_at, reverse=True)
 
-                    lines = [
-                        f"**ID:** `{e.event_id}` | **Name:** {e.name}",
-                        f"👤 Last updated by: {updated_by}",
-                        f":timer: On: {formatted_time}",
-                        f"🔎 Visible: {'✅' if e.visible else '❌'} | :tada:  Active: {'✅' if e.active else '❌'} | 📎 Embed: {'✅' if e.embed_message_id else '❌'} | 🎭 Role: {'✅' if e.role_id else '❌'}",
-                    ]
-                    embed.add_field(name="\n", value="\n".join(lines), inline=False)
-                pages.append(embed)
+        pages = []
+        for i in range(0, len(events), EVENTS_PER_PAGE):
+            chunk = events[i:i+EVENTS_PER_PAGE]
+            embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})")
+            for e in chunk:
+                updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
+                formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
+
+                lines = [
+                    f"**ID:** `{e.event_id}` | **Name:** {e.name}",
+                    f"👤 Last updated by: {updated_by}",
+                    f":timer: On: {formatted_time}",
+                    f"🔎 Visible: {'✅' if e.visible else '❌'} | 🎉 Active: {'✅' if e.active else '❌'} | 📎 Embed: {'✅' if e.embed_message_id else '❌'} | 🎭 Role: {'✅' if e.role_id else '❌'}",
+                ]
+                embed.add_field(name="\u200b", value="\n".join(lines), inline=False)
+            pages.append(embed)
+
         await paginate_embeds(interaction, pages)
 
 
@@ -662,41 +663,40 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
+        moderator_id = str(moderator.id) if moderator else None
+    
         with db_session() as session:
-            logs = events_crud.get_all_event_logs(session)
+            logs = events_crud.get_all_event_logs(
+                session,
+                action=action,
+                moderator=moderator_id
+            )
     
-            if action:
-                logs = [(log, eid) for log, eid in logs if log.action == action.lower()]
-            if moderator:
-                logs = [(log, eid) for log, eid in logs if log.performed_by == str(moderator.id)]
+        if not logs:
+            await interaction.followup.send("❌ No logs found with those filters.", ephemeral=True)
+            return
     
-            # Sort most recent first
-            logs.sort(key=lambda l: l[0].timestamp, reverse=True)
-    
-            if not logs:
-                await interaction.followup.send("❌ No logs found with those filters.", ephemeral=True)
-                return
-    
-            embeds = []
-            for i in range(0, len(logs), LOGS_PER_PAGE):
-                chunk = logs[i:i+LOGS_PER_PAGE]
-                embed = discord.Embed(
-                    title=f"📜 Event Logs ({i+1}-{i+len(chunk)}/{len(logs)})",
-                    color=discord.Color.orange()
+        embeds = []
+        for i in range(0, len(logs), LOGS_PER_PAGE):
+            chunk = logs[i:i+LOGS_PER_PAGE]
+            embed = discord.Embed(
+                title=f"📜 Event Logs ({i+1}-{i+len(chunk)}/{len(logs)})",
+                color=discord.Color.orange()
+            )
+            for log, event_id_str in chunk:
+                label = f"Event `{event_id_str}`" if event_id_str else "Deleted Event"
+                entry_str = format_log_entry(
+                    action=log.action,
+                    performed_by=log.performed_by,
+                    timestamp=log.timestamp,
+                    description=log.description,
+                    label=label
                 )
-                for log, event_id_str in chunk:
-                    label = f"Event `{event_id_str}`" if event_id_str else "Deleted Event"
-                    entry_str = format_log_entry(
-                        action=log.action,
-                        performed_by=log.performed_by,
-                        timestamp=log.timestamp,
-                        description=log.description,
-                        label=label
-                    )
-                    embed.add_field(name="\n", value=entry_str, inline=False)
-                embeds.append(embed)
+                embed.add_field(name="\n", value=entry_str, inline=False)
+            embeds.append(embed)
     
         await paginate_embeds(interaction, embeds)
+
 
 
 # === Setup Function ===

@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from discord import app_commands
 from discord.ext import commands
+from typing import Optional
 from bot.crud.actions_crud import create_action as crud_create_action, get_action_by_key, get_all_actions
 from bot.crud.users_crud import action_is_used
 from bot.config import ALLOWED_ACTION_INPUT_FIELDS, ACTIONS_PER_PAGE
@@ -160,13 +161,17 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     
     # === LIST ACTIONS ===
     @admin_or_mod_check()
-    @app_commands.command(name="list", description="List all available global actions.")
     @app_commands.describe(
-        show_inactive="Set to True to show inactive actions as well."
+        show_inactive="Set to True to show inactive actions",
+        search_key="Search actions by key (partial match)"
     )
-    async def list_actions(self, interaction: discord.Interaction, show_inactive: bool = False):
-        print(f"listactions callback fired from: {__file__}")
-    
+    @app_commands.command(name="list", description="List all available global actions.")
+    async def list_actions(
+        self,
+        interaction: discord.Interaction,
+        show_inactive: bool = False,
+        search_key: Optional[str] = None
+    ):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
         # Icons for input field types
@@ -178,24 +183,21 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             "date_value": "📅"
         }
     
-        # Pull data from DB before closing session
         with db_session() as session:
-            actions = get_all_actions(session)
-            
+            actions = get_all_actions(
+                session,
+                active=None if show_inactive else True,
+                key_search=search_key
+            )
+    
             parsed_actions = []
-            
-            if not show_inactive:
-                actions = [e for e in actions if getattr(e, "active", False)]
-                
             for action in actions:
-                # Safe JSON parsing
                 try:
                     input_fields = json.loads(action.input_fields_json) if action.input_fields_json else []
                 except Exception as e:
                     print(f"ERROR: Failed to parse input_fields for {action.action_key}: {e}")
                     input_fields = []
     
-                # Truncate description to avoid embed limit
                 desc = action.description or "No description"
                 if len(desc) > 1000:
                     desc = desc[:1000] + "…"
@@ -206,8 +208,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     "input_fields": input_fields,
                     "active": action.active
                 })
-     
-        # Sort alphabetically by key
+    
         parsed_actions.sort(key=lambda a: a["key"].lower())
     
         if not parsed_actions:
@@ -218,13 +219,14 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         pages = []
         for i in range(0, len(parsed_actions), ACTIONS_PER_PAGE):
             chunk = parsed_actions[i:i + ACTIONS_PER_PAGE]
-            if show_inactive:
-                description_text="🟢 Active | 🔴 Inactive\nUse the **Action Key** when linking to an event.\n"
-            else:
-                description_text="Use the **Action Key** when linking to an event.\n"
+            description_text = (
+                "🟢 Active | 🔴 Inactive\nUse the **Action Key** when linking to an event.\n"
+                if show_inactive else
+                "Use the **Action Key** when linking to an event.\n"
+            )
             embed = discord.Embed(
                 title=f"📋 Global Actions ({i+1}-{i+len(chunk)}/{len(parsed_actions)})",
-                description = description_text,
+                description=description_text,
                 color=discord.Color.blue()
             )
     
@@ -241,16 +243,13 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     name_display = f"🆔 `{action['key']}` {status_icon}"
                 else:
                     name_display = f"🆔 `{action['key']}`"
-                
-                embed.add_field(
-                    name=name_display,
-                    value=value,
-                    inline=False
-                )
+    
+                embed.add_field(name=name_display, value=value, inline=False)
     
             pages.append(embed)
     
         await paginate_embeds(interaction, pages)
+
     
 
 async def setup(bot):

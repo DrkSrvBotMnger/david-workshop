@@ -31,8 +31,23 @@ def get_action_by_id(session: Session, action_id: int):
     return session.query(Action).filter_by(id=action_id).first()
 
 # --- LIST ---
-def get_all_actions(session: Session, active: bool = None):
+def get_all_actions(
+    session: Session,
+    active: bool = None,
+    key_search: str = None
+):
+    """
+    Retrieve actions with optional filters:
+    - active: True/False to filter by status
+    - key_search: partial match on action_key
+    """
     query = session.query(Action)
+
     if active is not None:
         query = query.filter(Action.active == active)
+
+    if key_search:
+        query = query.filter(Action.action_key.ilike(f"%{key_search}%"))
+
     return query.order_by(Action.created_at.desc()).all()
+

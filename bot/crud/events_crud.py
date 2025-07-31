@@ -131,6 +131,13 @@ def delete_event(
  
 
 def get_all_events(session, tag: str = None, active: bool = None, visible: bool = None, mod_id: str = None):
+    """
+    Retrieve events with optional filters.
+    - tag: partial match on one of the tags
+    - active: True/False to filter by status active
+    - visible: True/False to filter by status visible
+    - moderator: Discord ID of moderator
+    """
     query = session.query(Event)
 
     if tag:
@@ -146,10 +153,18 @@ def get_all_events(session, tag: str = None, active: bool = None, visible: bool 
 
 
 def get_all_event_logs(session, action: str = None, moderator: str = None):
-    query = session.query(EventLog, Event.event_id).outerjoin(Event, EventLog.event_id == Event.id)
+    """
+    Retrieve event logs with optional filters.
+    - action: 'create', 'edit', 'delete'
+    - moderator: Discord ID of moderator
+    """
+    query = (
+        session.query(EventLog, Event.event_id)
+        .outerjoin(Event, EventLog.event_id == Event.id)
+    )
 
     if action:
-        query = query.filter(EventLog.action == action)
+        query = query.filter(EventLog.action == action.lower())
     if moderator:
         query = query.filter(EventLog.performed_by == moderator)
 
