@@ -130,7 +130,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                         "⚠️ **FORCED OVERRIDE** — this may impact participants!")
                     if not confirmed:
                         return
-            
+
             updates = {}
             if name:
                 updates["reward_name"] = name
@@ -154,7 +154,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
         await interaction.followup.send(f"✅ Reward `{reward_id}` updated successfully.")
 
-    
+
     # === DELETE REWARD ===
     @admin_or_mod_check()
     @app_commands.describe(
@@ -189,7 +189,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     )
                 if not confirmed:
                     return
-            
+
             return
 
         with db_session() as session:
@@ -197,7 +197,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
         await interaction.edit_original_response(content=f"✅ Reward `{reward_id}` deleted.", view=None)
 
-    
+
     # === LIST REWARDS ===
     @admin_or_mod_check()
     @app_commands.describe(
@@ -292,12 +292,12 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 else:
                     embed.add_field(name="📢 Preset Channel", value="*Not Published*", inline=True)
                     embed.add_field(name="🔗 Preset Message", value="*Not Published*", inline=True)
-            
+
             embed.add_field(name="👩‍💻 Created / Edited By", value=created_edited, inline=False)
 
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-    
+
     # === REWARD LOGS ===
     @admin_or_mod_check()
     @app_commands.describe(
@@ -345,134 +345,134 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
         await paginate_embeds(interaction, pages)
 
-    
+
     # === PUBLISH PRESET ===
-@admin_or_mod_check()
-@app_commands.describe(
-	reward_id="ID of the reward to link the preset to",
-	message_link="Link to the message containing the preset content",
-	force="Override restrictions for active events"
-)
-@app_commands.command(
-	name="publishpreset",
-	description="Publish a reward preset to the official preset channel."
-)
-async def publish_preset(
-	self,
-	interaction: Interaction,
-	reward_id: str,
-	message_link: str,
-	force: bool = False
-):
-	await interaction.response.defer(thinking=True, ephemeral=True)
+    @admin_or_mod_check()
+    @app_commands.describe(
+        reward_id="ID of the reward to link the preset to",
+        message_link="Link to the message containing the preset content",
+        force="Override restrictions for active events"
+    )
+    @app_commands.command(
+        name="publishpreset",
+        description="Publish a reward preset to the official preset channel."
+    )
+    async def publish_preset(
+        self,
+        interaction: Interaction,
+        reward_id: str,
+        message_link: str,
+        force: bool = False
+    ):
+        await interaction.response.defer(thinking=True, ephemeral=True)
 
-	# 1️⃣ Parse message link
-	try:
-		parts = message_link.strip().split("/")
-		channel_id = int(parts[-2])
-		message_id = int(parts[-1])
-	except Exception:
-		await interaction.followup.send("❌ Invalid message link format.")
-		return
+        # 1️⃣ Parse message link
+        try:
+            parts = message_link.strip().split("/")
+            channel_id = int(parts[-2])
+            message_id = int(parts[-1])
+        except Exception:
+            await interaction.followup.send("❌ Invalid message link format.")
+            return
 
-	# 2️⃣ Fetch reward & active event guard
-	with db_session() as session:
-		reward = rewards_crud.get_reward(session, reward_id)
-		if not reward:
-			await interaction.followup.send(f"❌ Reward `{reward_id}` not found.")
-			return
+        # 2️⃣ Fetch reward & active event guard
+        with db_session() as session:
+            reward = rewards_crud.get_reward(session, reward_id)
+            if not reward:
+                await interaction.followup.send(f"❌ Reward `{reward_id}` not found.")
+                return
 
-		if rewards_crud.reward_is_linked_to_active_event(session, reward_id):
-			if reward.use_message_id and not force:
-				await interaction.followup.send(
-					"❌ Cannot re-publish a preset for a reward linked to an active event without `--force`."
-				)
-				return
-			if force:
-				confirmed = await confirm_action(
-					interaction,
-					f"reward `{reward_id}` linked to an ACTIVE event",
-					"⚠️ **FORCED REPUBLISH** — participants may see changed content!"
-				)
-				if not confirmed:
-					return
+        if rewards_crud.reward_is_linked_to_active_event(session, reward_id):
+            if reward.use_message_id and not force:
+                await interaction.followup.send(
+                    "❌ Cannot re-publish a preset for a reward linked to an active event without `--force`."
+                )
+                return
+            if force:
+                confirmed = await confirm_action(
+                    interaction,
+                    f"reward `{reward_id}` linked to an ACTIVE event",
+                    "⚠️ **FORCED REPUBLISH** — participants may see changed content!"
+                )
+                if not confirmed:
+                    return
 
-	# 3️⃣ Archive & delete old preset if exists
-	if reward.use_header_message_id and reward.use_message_id:
-		try:
-			old_channel = await self.bot.fetch_channel(int(REWARD_PRESET_CHANNEL_ID))
-			old_header = await old_channel.fetch_message(int(reward.use_header_message_id))
-			old_preset = await old_channel.fetch_message(int(reward.use_message_id))
+        # 3️⃣ Archive & delete old preset if exists
+        if reward.use_header_message_id and reward.use_message_id:
+            try:
+                old_channel = await self.bot.fetch_channel(int(REWARD_PRESET_CHANNEL_ID))
+                old_header = await old_channel.fetch_message(int(reward.use_header_message_id))
+                old_preset = await old_channel.fetch_message(int(reward.use_message_id))
 
-			archive_channel = interaction.guild.get_channel(REWARD_PRESET_ARCHIVE_CHANNEL_ID)
-			if archive_channel:
-				# Archive header
-				await archive_channel.send(
-					content=(
-						f"📦 **Archived Header** for `{reward.reward_name}` (`{reward.reward_id}`)\n"
-						f"*Originally published on:* {reward.preset_set_at or 'Unknown'}\n\n"
-						f"{old_header.content or ''}"
-					),
-					embeds=old_header.embeds,
-					files=[await a.to_file() for a in old_header.attachments]
-				)
+                archive_channel = interaction.guild.get_channel(REWARD_PRESET_ARCHIVE_CHANNEL_ID)
+                if archive_channel:
+                    # Archive header
+                    await archive_channel.send(
+                        content=(
+                            f"📦 **Archived Header** for `{reward.reward_name}` (`{reward.reward_id}`)\n"
+                            f"*Originally published on:* {reward.preset_set_at or 'Unknown'}\n\n"
+                            f"{old_header.content or ''}"
+                        ),
+                        embeds=old_header.embeds,
+                        files=[await a.to_file() for a in old_header.attachments]
+                    )
 
-				# Archive clean preset
-				await archive_channel.send(
-					content=f"📦 **Archived Preset Content** for `{reward.reward_name}` (`{reward.reward_id}`)",
-					embeds=old_preset.embeds,
-					files=[await a.to_file() for a in old_preset.attachments]
-				)
+                    # Archive clean preset
+                    await archive_channel.send(
+                        content=f"📦 **Archived Preset Content** for `{reward.reward_name}` (`{reward.reward_id}`)",
+                        embeds=old_preset.embeds,
+                        files=[await a.to_file() for a in old_preset.attachments]
+                    )
 
-			# Delete both old messages
-			await old_header.delete()
-			await old_preset.delete()
+                # Delete both old messages
+                await old_header.delete()
+                await old_preset.delete()
 
-		except Exception as e:
-			print(f"⚠️ Failed to archive/delete old preset: {e}")
+            except Exception as e:
+                print(f"⚠️ Failed to archive/delete old preset: {e}")
 
-	# 4️⃣ Fetch the NEW preset message from the link
-	try:
-		source_channel = await self.bot.fetch_channel(channel_id)
-		original_message = await source_channel.fetch_message(message_id)
-	except Exception:
-		await interaction.followup.send("❌ Could not fetch the original preset message.")
-		return
+        # 4️⃣ Fetch the NEW preset message from the link
+        try:
+            source_channel = await self.bot.fetch_channel(channel_id)
+            original_message = await source_channel.fetch_message(message_id)
+        except Exception:
+            await interaction.followup.send("❌ Could not fetch the original preset message.")
+            return
 
-	# 5️⃣ Post new header in approved channel
-	preset_channel = interaction.guild.get_channel(REWARD_PRESET_CHANNEL_ID)
-	if not preset_channel:
-		await interaction.followup.send("❌ Official preset channel not found.")
-		return
+        # 5️⃣ Post new header in approved channel
+        preset_channel = interaction.guild.get_channel(REWARD_PRESET_CHANNEL_ID)
+        if not preset_channel:
+            await interaction.followup.send("❌ Official preset channel not found.")
+            return
 
-	header_text = (
-		f"🏆 **Reward Preset Published**\n"
-		f"**Reward:** {reward.reward_name} (`{reward.reward_id}`)\n"
-		f"**Published by:** <@{interaction.user.id}>\n"
-		f"**Date:** <t:{now_unix()}:F>"
-	)
-	new_header = await preset_channel.send(content=header_text)
+        header_text = (
+            f"🏆 **Reward Preset Published**\n"
+            f"**Reward:** {reward.reward_name} (`{reward.reward_id}`)\n"
+            f"**Published by:** <@{interaction.user.id}>\n"
+            f"**Date:** <t:{now_unix()}:F>"
+        )
+        new_header = await preset_channel.send(content=header_text)
 
-	# 6️⃣ Post new clean preset in approved channel
-	new_clean = await preset_channel.send(
-		content=original_message.content or None,
-		embeds=original_message.embeds,
-		files=[await a.to_file() for a in original_message.attachments]
-	)
+        # 6️⃣ Post new clean preset in approved channel
+        new_clean = await preset_channel.send(
+            content=original_message.content or None,
+            embeds=original_message.embeds,
+            files=[await a.to_file() for a in original_message.attachments]
+        )
 
-	# 7️⃣ Save both message IDs in DB
-	with db_session() as session:
-		rewards_crud.publish_preset(
-			session=session,
-			reward_id=reward_id,
-			use_channel_id=REWARD_PRESET_CHANNEL_ID,
-			use_message_id=new_clean.id,           # clean preset
-			use_header_message_id=new_header.id,   # header
-			set_by=str(interaction.user.id)
-		)
+        # 7️⃣ Save both message IDs in DB
+        with db_session() as session:
+            rewards_crud.publish_preset(
+                session=session,
+                reward_id=reward_id,
+                use_channel_id=REWARD_PRESET_CHANNEL_ID,
+                use_message_id=new_clean.id,           # clean preset
+                use_header_message_id=new_header.id,   # header
+                set_by=str(interaction.user.id)
+            )
 
-	# 8️⃣ Confirm to mod
-	await interaction.followup.send(f"✅ Preset published for reward `{reward.reward_name}`.")
+        # 8️⃣ Confirm to mod
+        await interaction.followup.send(f"✅ Preset published for reward `{reward.reward_name}`.")
 
 
 
