@@ -4,6 +4,11 @@ from bot.utils import now_iso
 from db.schema import Event, EventLog
 
 
+# --- GET ---
+def get_event(session, event_id):
+    return session.query(Event).filter_by(event_id=event_id).first()
+
+
 # --- CREATE ---
 def create_event(
     session,
@@ -126,11 +131,6 @@ def delete_event(
     
     return True
 
-
-# --- GET ---
-def get_event(session, event_id):
-    return session.query(Event).filter_by(event_id=event_id).first()
-
     
 # --- LIST ---
 def get_all_events(session, tag=None, active=None, visible=None, mod_id=None):
@@ -170,3 +170,9 @@ def get_event_logs(session, action=None, performed_by=None):
         query = query.filter(EventLog.performed_by == performed_by)
 
     return query.order_by(EventLog.timestamp.desc()).all()
+
+
+# --- VALIDATE ---
+def is_event_active(session, event_id: int) -> bool:
+    event = get_event(session, event_id)
+    return bool(event and event.active)

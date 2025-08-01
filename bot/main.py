@@ -11,6 +11,7 @@ class MyBot(commands.Bot):
             "bot.commands.admin.events_admin",
             "bot.commands.admin.actions_admin",
             "bot.commands.admin.rewards_admin",
+            "bot.commands.admin.event_links_admin",
         ]
         for cog in admin_cogs:
             try:
@@ -20,10 +21,10 @@ class MyBot(commands.Bot):
                 print(f"❌ Failed to load {cog}: {e}")
 
         try:
-            await self.load_extension("bot.commands.user")
-            print("✅ User commands loaded.")
+            await self.load_extension("bot.commands.member")
+            print("✅ Member commands loaded.")
         except Exception as e:
-            print(f"❌ Failed to load user commands: {e}")
+            print(f"❌ Failed to load member commands: {e}")
 
 # Bot setup
 intents = discord.Intents.default()

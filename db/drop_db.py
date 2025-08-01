@@ -1,6 +1,7 @@
 import os
 from database import engine
 from schema import Base
+from sqlalchemy import text
 
 mode = os.getenv("DB_MODE", "dev").lower()
 
@@ -9,5 +10,6 @@ if confirm.lower() != "yes":
     print("✅ Operation cancelled.")
     exit()
 
-Base.metadata.drop_all(engine)
+print("Dropping ALL tables...")
+Base.metadata.drop_all(bind=engine)
 print(f"🧨 Dropped schema for DB_MODE={mode}.")

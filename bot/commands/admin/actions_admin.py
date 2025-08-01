@@ -36,8 +36,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         # --- Validate action key format ---
         if not action_key.isidentifier() or not action_key.islower():
             await interaction.followup.send(
-                "❌ Action key must be lowercase letters, numbers, and underscores only (e.g. `submit_fic`).",
-                ephemeral=True
+                "❌ Action key must be lowercase letters, numbers, and underscores only (e.g. `submit_fic`)."
             )
             return
 
@@ -48,8 +47,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             for field in parsed:
                 if field not in ALLOWED_ACTION_INPUT_FIELDS:
                     await interaction.followup.send(
-                        f"❌ Invalid input field `{field}`. Allowed values: {', '.join(ALLOWED_ACTION_INPUT_FIELDS)}",
-                        ephemeral=True
+                        f"❌ Invalid input field `{field}`. Allowed values: {', '.join(ALLOWED_ACTION_INPUT_FIELDS)}"
                     )
                     return
             input_fields_json = json.dumps(parsed)
@@ -57,7 +55,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         # --- Check for duplicate ---
         with db_session() as session:
             if get_action_by_key(session, action_key):
-                await interaction.followup.send(f"❌ Action `{action_key}` already exists.", ephemeral=True)
+                await interaction.followup.send(f"❌ Action `{action_key}` already exists.")
                 return
 
             # --- Create the action ---
@@ -73,8 +71,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             f"✅ **Action Created**\n"
             f"**Key:** `{action_key}`\n"
             f"**Description:** {description}\n"
-            f"**Input fields:** {', '.join(json.loads(input_fields_json)) if input_fields_json else 'None'}",
-            ephemeral=True
+            f"**Input fields:** {', '.join(json.loads(input_fields_json)) if input_fields_json else 'None'}"
         )
 
 
@@ -89,16 +86,14 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             action = get_action_by_key(session, action_key)
             if not action:
                 await interaction.followup.send(
-                    f"❌ Action `{action_key}` does not exist.",
-                    ephemeral=True
+                    f"❌ Action `{action_key}` does not exist."
                 )
                 return
 
             # Block if inactive
             if not action.active:
                 await interaction.followup.send(
-                    f"❌ Action `{action_key}` is inactive. You cannot delete historical actions.",
-                    ephemeral=True
+                    f"❌ Action `{action_key}` is inactive. You cannot delete historical actions."
                 )
                 return
 
@@ -106,16 +101,14 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             if action_is_used(session, action.id):
                 await interaction.followup.send(
                     f"❌ Action `{action_key}` is referenced in user history and cannot be deleted.\n"
-                    f"Deactivate it instead to keep history intact.",
-                    ephemeral=True
+                    f"Deactivate it instead to keep history intact."
                 )
                 return
 
             # Delete it
             session.delete(action)
-            session.commit()
 
-        await interaction.followup.send(f"🗑️ Action `{action_key}` deleted successfully.", ephemeral=True)
+        await interaction.followup.send(f"🗑️ Action `{action_key}` deleted successfully.")
 
 
     # === DEACTIVATE ACTION ===
@@ -130,10 +123,10 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         with db_session() as session:
             action = get_action_by_key(session, action_key)
             if not action:
-                await interaction.followup.send(f"❌ Action `{action_key}` does not exist.", ephemeral=True)
+                await interaction.followup.send(f"❌ Action `{action_key}` does not exist.")
                 return
             if not action.active:
-                await interaction.followup.send(f"⚠️ Action `{action_key}` is already inactive.", ephemeral=True)
+                await interaction.followup.send(f"⚠️ Action `{action_key}` is already inactive.")
                 return
 
             # Auto-version key: find next available `_vX`
@@ -149,12 +142,10 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
             action.action_key = candidate_key
             action.active = False
             action.deactivated_at = now_iso()
-            session.commit()
 
         await interaction.followup.send(
             f"✅ Action `{action_key}` has been deactivated and renamed to `{candidate_key}`.\n"
-            f"It will no longer be available for linking to new events.",
-            ephemeral=True
+            f"It will no longer be available for linking to new events."
         )
 
     

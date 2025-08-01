@@ -2,6 +2,11 @@ from bot.utils import now_iso
 from db.schema import User
 
 
+# --- GET ---
+def get_user(session, discord_id):
+    return session.query(User).filter_by(discord_id=discord_id).first()
+
+
 # --- CREATE OR GET ---
 def get_or_create_user(session, discord_id, username=None):
     user = session.query(User).filter_by(discord_id=discord_id).first()
@@ -28,11 +33,6 @@ def update_user(session, discord_id, display_name=None, nickname=None):
 
     user.modified_at = now_iso()
     return user
-
-
-# --- GET ---
-def get_user(session, discord_id):
-    return session.query(User).filter_by(discord_id=discord_id).first()
 
 
 # --- VALIDATE ---

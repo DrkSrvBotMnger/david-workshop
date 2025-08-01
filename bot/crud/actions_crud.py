@@ -3,6 +3,14 @@ from bot.utils import now_iso
 from db.schema import Action
 
 
+# --- GET ---
+def get_action_by_key(session: Session, action_key: str):
+    return session.query(Action).filter_by(action_key=action_key).first()
+
+def get_action_by_id(session: Session, action_id: int):
+    return session.query(Action).filter_by(id=action_id).first()
+
+
 # --- CREATE ---
 def create_action(session: Session, action_key: str, description: str, input_fields_json: str = None):
     action = Action(
@@ -24,14 +32,6 @@ def delete_action(session: Session, action_key: str):
     session.delete(action)
     
     return True
-
-
-# --- GET ---
-def get_action_by_key(session: Session, action_key: str):
-    return session.query(Action).filter_by(action_key=action_key).first()
-
-def get_action_by_id(session: Session, action_id: int):
-    return session.query(Action).filter_by(id=action_id).first()
 
 
 # --- LIST ---
@@ -61,4 +61,3 @@ def get_all_actions(
         query = query.order_by(Action.created_at.desc())
 
     return query.all()
-

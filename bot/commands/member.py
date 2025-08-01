@@ -35,8 +35,8 @@ class EventButtons(discord.ui.View):
         )
 
 
-# === USER COMMANDS COG ===
-class UserCommands(commands.Cog):
+# === MEMBER COMMANDS COG ===
+class MemberCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
@@ -97,4 +97,4 @@ class UserCommands(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(UserCommands(bot))
+    await bot.add_cog(MemberCommands(bot))

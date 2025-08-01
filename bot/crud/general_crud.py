@@ -1,7 +1,7 @@
 from bot.utils import now_iso
 
 
-# Log function
+# --- LOG ---
 def log_change(*,session, log_model, fk_field: str, fk_value: int, action: str, performed_by: str, description: str = None, forced: bool = False):
     """Generic logging for any object with a log table."""
 

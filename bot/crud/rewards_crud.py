@@ -5,6 +5,12 @@ from bot.utils import now_iso
 from db.schema import Reward, RewardLog, RewardEvent, Event
 
 
+# --- GET ---
+def get_reward(session: Session, reward_id: str) -> Reward:
+    """Retrieve a reward by its internal reward_id."""
+    return session.query(Reward).filter_by(reward_id=reward_id).first()
+
+
 # --- CREATE ---
 def create_reward(session: Session, reward_data: dict, performed_by: str) -> Reward:
     """
@@ -79,52 +85,6 @@ def delete_reward(session: Session, reward_id: str, performed_by: str) -> bool:
     return True
 
 
-# --- PUBLISH ---
-def publish_preset(
-    session: Session,
-    reward_id: str,
-    use_channel_id: str,
-    use_message_id: str,
-    use_header_message_id: str, 
-    set_by: str
-) -> Reward:
-    """
-    Update a reward's approved preset details.
-    Also logs the publish action.
-    """
-    reward = get_reward(session, reward_id)
-    if not reward:
-        return None
-
-    reward.use_channel_id = str(use_channel_id)
-    reward.use_message_id = str(use_message_id)
-    reward.use_header_message_id = str(use_header_message_id)  # header
-    reward.preset_set_by = str(set_by)
-    reward.preset_set_at = now_iso()
-
-    reward.modified_by = set_by
-    reward.modified_at = reward.preset_set_at
-
-    general_crud.log_change(
-        session=session,
-        log_model=RewardLog,
-        fk_field="reward_id",
-        fk_value=reward.id,
-        action="edit",
-        performed_by=set_by,
-        description=f"Published/updated preset for reward `{reward.reward_id}`.",
-        forced=True
-    )
-
-    return reward
-
-
-# --- GET ---
-def get_reward(session: Session, reward_id: str) -> Reward:
-    """Retrieve a reward by its internal reward_id."""
-    return session.query(Reward).filter_by(reward_id=reward_id).first()
-
-
 # --- LIST ---
 def get_all_rewards(
     session,
@@ -179,6 +139,46 @@ def get_reward_logs(
     return query.order_by(RewardLog.timestamp.desc()).all()
 
 
+# --- PUBLISH ---
+def publish_preset(
+    session: Session,
+    reward_id: str,
+    use_channel_id: str,
+    use_message_id: str,
+    use_header_message_id: str, 
+    set_by: str
+) -> Reward:
+    """
+    Update a reward's approved preset details.
+    Also logs the publish action.
+    """
+    reward = get_reward(session, reward_id)
+    if not reward:
+        return None
+
+    reward.use_channel_id = str(use_channel_id)
+    reward.use_message_id = str(use_message_id)
+    reward.use_header_message_id = str(use_header_message_id)  # header
+    reward.preset_set_by = str(set_by)
+    reward.preset_set_at = now_iso()
+
+    reward.modified_by = set_by
+    reward.modified_at = reward.preset_set_at
+
+    general_crud.log_change(
+        session=session,
+        log_model=RewardLog,
+        fk_field="reward_id",
+        fk_value=reward.id,
+        action="edit",
+        performed_by=set_by,
+        description=f"Published/updated preset for reward `{reward.reward_id}`.",
+        forced=True
+    )
+
+    return reward
+    
+
 # --- VALIDATE ---
 def reward_is_linked_to_active_event(session, reward_code: str) -> bool:
     """
@@ -205,4 +205,3 @@ def reward_is_linked_to_active_event(session, reward_code: str) -> bool:
         .count()
         > 0
     )
-
