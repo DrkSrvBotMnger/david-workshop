@@ -30,6 +30,10 @@ class User(Base):
     created_at = Column(String, nullable=False)
     modified_at = Column(String, nullable=True)
 
+    inventory_items = relationship("Inventory", back_populates="user", passive_deletes=True)
+    event_data = relationship("UserEventData", back_populates="user", passive_deletes=True)
+    actions = relationship("UserAction", back_populates="user", passive_deletes=True)
+
     def __repr__(self):
         return f"<User {self.user_discord_id} name={self.username}>"
 
@@ -67,6 +71,12 @@ class Event(Base):
     modified_by = Column(String, nullable=True)		# discord unique user id
     modified_at = Column(String, nullable=True)
 
+    action_configs = relationship("ActionEvent", back_populates="event", passive_deletes=True)
+    reward_configs = relationship("RewardEvent", back_populates="event", passive_deletes=True)
+    event_participants = relationship("UserEventData", back_populates="event")
+    action_logs = relationship("UserAction", back_populates="event")
+    change_logs = relationship("EventLog", back_populates="event")
+    
     def __repr__(self):
         return f"<Event {self.event_key} name={self.event_name}>"
 
@@ -83,7 +93,7 @@ class EventLog(Base):
     performed_at = Column(String, nullable=False)
     log_description = Column(Text, nullable=True)		# optional reason/details
 
-    event = relationship("Event", backref="change_logs")
+    event = relationship("Event", back_populates="change_logs")
 
     def __repr__(self):
         if self.event and self.event.event_key:
@@ -112,8 +122,8 @@ class Inventory(Base):
 
     is_equipped = Column(Boolean, default=False, nullable=False)
 
-    user = relationship("User", backref="inventory_items")
-    reward = relationship("Reward", backref="owned_by")
+    user = relationship("User", back_populates="inventory_items")
+    reward = relationship("Reward", back_populates="owned_by")
 
     __table_args__ = (UniqueConstraint('user_id', 'reward_id', name='uix_user_reward'),)
     
@@ -145,12 +155,12 @@ class UserEventData(Base):
     custom_notes = Column(Text, nullable=True)
     status = Column(String, default="active", nullable=False)
 
-    user = relationship("User", backref="event_data")
-    event = relationship("Event", backref="event_participants")
-
     created_by = Column(String, nullable=False)		# discord unique user id
     modified_by = Column(String, nullable=True)		# discord unique user id
     modified_at = Column(String, nullable=True)
+
+    user = relationship("User", back_populates="event_data")
+    event = relationship("Event", back_populates="event_participants")
     
     __table_args__ = (UniqueConstraint('user_id', 'event_id', name='uix_user_event'),)
 
@@ -175,6 +185,9 @@ class Action(Base):
 
     created_at = Column(String, nullable=False)
     deactivated_at = Column(String, nullable=True)
+    
+    event_configs = relationship("ActionEvent", back_populates="action", passive_deletes=True)
+    performed_actions = relationship("UserAction", back_populates="action")
 
     def __repr__(self):
         return f"<Action {self.action_key} description={self.action_description}>"
@@ -203,9 +216,10 @@ class ActionEvent(Base):
     modified_by = Column(String, nullable=True)		# discord unique user id 
     modified_at = Column(String, nullable=True)
 
-    action = relationship("Action", backref="event_configs")
-    event = relationship("Event", backref="action_configs")
-    reward_event = relationship("RewardEvent", backref="granted_by_actions")
+    action = relationship("Action", back_populates="event_configs")
+    event = relationship("Event", back_populates="action_configs")
+    reward_event = relationship("RewardEvent", back_populates="granted_by_actions")
+    change_logs = relationship("ActionEventLog", back_populates="action_event")
 
     __table_args__ = (
     UniqueConstraint('event_id', 'action_id', 'variant', name='uix_event_action_variant'),
@@ -229,7 +243,7 @@ class ActionEventLog(Base):
     performed_at = Column(String, nullable=False)
     log_description = Column(Text, nullable=True)		# optional reason/details
 
-    action_event = relationship("ActionEvent", backref="change_logs")
+    action_event = relationship("ActionEvent", back_populates="change_logs")
 
     def __repr__(self):
         if self.action_event and self.action_event.action_event_key:
@@ -267,9 +281,9 @@ class UserAction(Base):
 
     metadata_json = Column(Text, nullable=True)		# optional extras (tbd)
 
-    user = relationship("User", backref="actions")
-    action = relationship("Action", backref="performed_actions")
-    event = relationship("Event", backref="action_logs")
+    user = relationship("User", back_populates="actions")
+    action = relationship("Action", back_populates="performed_actions")
+    event = relationship("Event", back_populates="action_logs")
 
     def __repr__(self):
         return (
@@ -315,6 +329,12 @@ class Reward(Base):
     preset_by = Column(String, nullable=True)		# discord unique user id
     preset_at = Column(String, nullable=True)
 
+    owned_by = relationship("Inventory", back_populates="reward", passive_deletes=True)
+    media_list = relationship("RewardMedia", back_populates="reward", passive_deletes=True)
+    change_logs = relationship("RewardLog", back_populates="reward")
+    event_links = relationship("RewardEvent", back_populates="reward", passive_deletes=True)
+    
+
     def __repr__(self):
         return f"<Reward {self.reward_key} name={self.reward_name}>"
 
@@ -329,7 +349,7 @@ class RewardMedia(Base):
     created_by = Column(String, nullable=False)		# discord unique user id
     created_at = Column(String, nullable=False)
 
-    reward = relationship("Reward", backref="media_list")
+    reward = relationship("Reward", back_populates="media_list")
 
     def __repr__(self):
         return f"<RewardMedia reward={self.reward.reward_key if self.reward else self.reward_id} media_url={self.media_url}>"
@@ -346,7 +366,7 @@ class RewardLog(Base):
     performed_at = Column(String, nullable=False)
     log_description = Column(Text, nullable=True)		# optional reason/details
 
-    reward = relationship("Reward", backref="change_logs")
+    reward = relationship("Reward", back_populates="change_logs")
 
     def __repr__(self):
         if self.reward and self.reward.reward_key:
@@ -378,6 +398,11 @@ class RewardEvent(Base):
     modified_by = Column(String, nullable=True)		# discord unique user id
     modified_at = Column(String, nullable=True)
 
+    event = relationship("Event", back_populates="reward_configs")
+    reward = relationship("Reward", back_populates="event_links")
+    granted_by_actions = relationship("ActionEvent", back_populates="reward_event")
+    change_logs = relationship("RewardEventLog", back_populates="reward_event")
+
     __table_args__ = (
         UniqueConstraint('event_id', 'reward_id', 'availability', name='uix_event_reward_availability'),
     )
@@ -396,7 +421,7 @@ class RewardEventLog(Base):
     performed_at = Column(String, nullable=False)
     log_description = Column(Text, nullable=True)		# optional reason/details
 
-    reward_event = relationship("RewardEvent", backref="change_logs")
+    reward_event = relationship("RewardEvent", back_populates="change_logs")
 
     def __repr__(self):
         if self.reward_event and self.reward_event.reward_event_key:
