@@ -1,37 +1,23 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from typing import Optional
 from bot.crud import general_crud
 from bot.utils import now_iso
 from db.schema import RewardEvent, Reward, Event
 
 
 # --- GET ---
-def get_reward_event(
-    session, 
-    reward_event_id
-):
-    return session.query(RewardEvent).filter_by(id=reward_event_id).first()
+def get_reward_event_by_key(
+    session: Session, 
+    reward_event_key: str
+) -> Optional[Reward]:
+    return session.query(RewardEvent).filter_by(reward_event_key=reward_event_key).first()
 
-def get_rewards_for_event(session, event_id):
-    return session.query(RewardEvent).filter_by(event_id=event_id).all()
-
-
-# --- CREATE ---
-def create_reward_event(
-    session, 
-    event_id, 
-    reward_id, 
-    availability="inshop", 
-    price=0
-):
-    re = RewardEvent(
-        event_id=event_id,
-        reward_id=reward_id,
-        availability=availability,
-        price=price
-    )
-    session.add(re)
-    return re
+#def get_rewards_for_event(
+#    session: Session, 
+#    event_id
+#) -> list[RewardEvent]:
+#    return session.query(RewardEvent).filter_by(event_id=event_id).all()
 
 
 # --- UPDATE ---
@@ -66,8 +52,25 @@ def delete_reward_event(
 # REWARD EVENTS
 # ---------------------------
 
+# --- CREATE ---
 def create_reward_event(
-    session,
+    session, 
+    event_id, 
+    reward_id, 
+    availability="inshop", 
+    price=0
+):
+    re = RewardEvent(
+        event_id=event_id,
+        reward_id=reward_id,
+        availability=availability,
+        price=price
+    )
+    session.add(re)
+    return re
+    
+def create_reward_event(
+    session: Session, 
     reward_id,
     event_id,
     availability="inshop",

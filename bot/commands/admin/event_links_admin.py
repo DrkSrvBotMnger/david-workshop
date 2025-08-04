@@ -162,16 +162,16 @@ class EventLinksAdmin(commands.Cog):
     @admin_or_mod_check()
     @admin_links.command(name="link_reward_event")
     @app_commands.describe(
-        reward_id="ID of the reward",
-        event_id="ID of the event",
+        reward_shortcode="ID of the reward",
+        event_shortcode="ID of the event",
         availability="inshop or onaction",
         price="Price if availability is 'inshop'"
     )
     async def link_reward_event(
         self,
         interaction: Interaction,
-        reward_id: int,
-        event_id: int,
+        reward_shortcode: int,
+        event_shortcode: int,
         availability: str = "inshop",
         price: int = 0
     ):

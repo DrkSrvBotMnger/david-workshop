@@ -1,35 +1,35 @@
 import discord
-from datetime import datetime
 from discord import app_commands, Interaction, Embed
 from discord.ext import commands
 from typing import Optional
+
+from sqlalchemy.sql.base import _exclusive_against
 from bot.crud import events_crud, general_crud
-from bot.config import EMBED_CHANNEL_ID, EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
-from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, now_iso
+from bot.config import EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
+from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, parse_message_link, post_announcement_message
 from db.database import db_session
-from db.schema import EventLog
+from db.schema import EventLog, EventStatus
 
 class AdminEventCommands(commands.GroupCog, name="admin_event"):
     """Admin commands for managing events."""
     def __init__(self, bot):
         self.bot = bot
 
-    ## Event management commands
+    
     # === CREATE EVENT ===
     @admin_or_mod_check()
     @app_commands.describe(
-        shortcode="Unique shortcode (e.g. darklinaweek)",
+        shortcode="Shortcode for the event (date auto-added: YYMM)",
+        event_type="Type of event (by default freeform only for now)",
         name="Full name of the event",
         description="Public-facing description",
         start_date="Start date (YYYY-MM-DD)",
         end_date="End date (YYYY-MM-DD) (optional)",
         coordinator="Optional mod managing the event, defaults to you",
-        tags="Comma-separated tags (e.g. rp, halloween) (optional)",
-        embed_channel="Channel where the display embed lives (optional)",
-        embed_message_id="Message id of the embed to reuse (optional)",
-        role_id = "Discord role id to tag during announcements (optional)",
         priority="Order to display in listings (higher = higher)",
-        shop_section_id="Shop category ID tied to this event"
+        tags="Comma-separated tags (e.g. rp, halloween) (optional)",
+        message_link="Link to the message containing the display embed (optional)",
+        role_id = "Discord role id to tag during announcements (optional)"
         )
     @app_commands.command(name="create", description="Create a new event.")
     async def create_event(
@@ -39,19 +39,21 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         name: str,
         description: str,
         start_date: str,
+        event_type: Optional[str] = "freeform",  # for now, only freeform events are supported]
         end_date: Optional[str] = None,
         coordinator: Optional[discord.Member] = None,
-        tags: Optional[str] = None,
-        embed_channel: Optional[discord.TextChannel] = None,
-        embed_message_id: Optional[str] = None,
-        role_id: Optional[str] = None,
         priority: int = 0,
-        shop_section_id: Optional[str] = None
+        tags: Optional[str] = None,
+        message_link: Optional[str] = None,
+        role_id: Optional[str] = None,
     ):
-        """Creates an event. Event ID is auto-generated from shortcode + start month."""
+        """Creates an event. Event key is auto-generated from shortcode + start month."""
 
         await interaction.response.defer(thinking=True, ephemeral=True)
 
+        # TEMP: only freeform events are supported for now
+        event_type = "freeform"
+        
         # Handle date parsing
         start_date_parsed = safe_parse_date(start_date)
         if not start_date_parsed:
@@ -65,8 +67,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         else:
             end_date_parsed = None
 
-        # Auto-generate event_id
-        event_id = f"{shortcode.lower()}_{start_date_parsed[:7].replace('-', '_')}"
+        # Auto-generate event_key
+        event_key = f"{shortcode.lower()}{start_date_parsed[2:4]}{start_date_parsed[5:7]}"
 
         # Handle coordinator
         if coordinator:
@@ -77,52 +79,62 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             coordinator_display = interaction.user.mention
 
         # Handle tags and embed channel
-        tag_str = tags.strip() if tags else None
-        embed_channel_id = str(embed_channel.id) if embed_channel else EMBED_CHANNEL_ID
+        tag_str = tags.lower().strip() if tags else None
         
         if priority < 0:
             await interaction.followup.send("❌ Priority must be a non-negative integer.")
             return
+
+        # Parse message link
+        if message_link:
+            embed_channel_discord_id, embed_message_discord_id = parse_message_link(message_link)
+        else:
+            embed_channel_discord_id = None
+            embed_message_discord_id = None
         
         # Check for existing event_id then create event
         try:
             with db_session() as session:    
-                existing_event = events_crud.get_event(session, event_id)
+                existing_event = events_crud.get_event_by_key(
+                    session=session, 
+                    event_key=event_key
+                )
                 if existing_event:
                     await interaction.followup.send(
-                        f"❌ An event with ID `{event_id}` already exists. Choose a different shortcode or start date."
+                        f"❌ An event with shortcode `{event_key}` already exists. Choose a different shortcode or start date."
                     )
                     return
 
+                event_create_data ={
+                    "event_key": event_key,
+                    "event_name": name,
+                    "event_type": event_type,
+                    "event_description": description,
+                    "start_date": start_date_parsed,
+                    "end_date": end_date_parsed,
+                    "created_by": str(interaction.user.id),
+                    "coordinator_discord_id": coordinator_id,
+                    "priority": priority,
+                    "tags": tag_str,
+                    "embed_channel_discord_id": embed_channel_discord_id,
+                    "embed_message_discord_id": embed_message_discord_id,
+                    "role_discord_id": role_id                    
+                }
+                    
                 event = events_crud.create_event(
-                    session,
-                    event_id=event_id,
-                    name=name,
-                    type="freeform",
-                    description=description,
-                    start_date=start_date_parsed,
-                    end_date=end_date_parsed,
-                    created_by=str(interaction.user.id),
-                    coordinator_id=coordinator_id,
-                    priority=priority,
-                    shop_section_id=shop_section_id,
-                    active=False,
-                    visible=False,
-                    tags=tag_str,
-                    embed_channel_id=embed_channel_id,
-                    embed_message_id=embed_message_id,
-                    role_id=role_id
+                    session=session,
+                    event_create_data=event_create_data
                 )
-
+                
                 # Extract now while session is open
-                safe_event_name = event.name
+                safe_event_name = event.event_name
 
         except Exception as e:
             print(f"❌ DB failure: {e}")
             await interaction.followup.send("❌ An unexpected error occurred.")
             return
 
-        msg = f"✅ Event `{safe_event_name}` created with ID `{event_id}`.\n👤 Coordinator: {coordinator_display}"
+        msg = f"✅ Event `{safe_event_name}` created with shortcode `{event_key}`.\n👤 Coordinator: {coordinator_display}"
         if not coordinator:
             msg += " *(defaulted to you)*"
 
@@ -132,440 +144,220 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
     # === EDIT EVENT ===
     @admin_or_mod_check()
     @app_commands.describe(
-        event_id="ID of the event to edit",
+        shortcode="Shortcode of the event to edit",
         name="New full name (optional)",
         description="New description (optional)",
         start_date="New start date (YYYY-MM-DD)",
         end_date="New end date (YYYY-MM-DD, use CLEAR to remove)",
         coordinator="New coordinator (optional)",
         tags="New comma-separated tags (use CLEAR to remove)",
-        embed_channel="New channel for the display embed",
-        embed_message_id="New embed message id to reuse (use CLEAR to remove)",
-        role_id = "New discord role id to tag during announcements (use CLEAR to remove)",
         priority="Updated display priority (use CLEAR to remove)",
-        shop_section_id="New shop category ID (use CLEAR to remove)",
+        message_link="New message link to display (use CLEAR to remove)",
+        role_id = "New discord role id to tag during announcements (use CLEAR to remove)",
         reason="Optional reason for editing (will be logged)"
     )
     @app_commands.command(name="edit", description="Edit an existing event's metadata.")
     async def edit_event(
         self,
         interaction: discord.Interaction,
-        event_id: str,
+        shortcode: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         coordinator: Optional[discord.Member] = None,
         tags: Optional[str] = None,
-        embed_channel: Optional[discord.TextChannel] = None,
-        embed_message_id: Optional[str] = None,
-        role_id: Optional[discord.Role] = None,
         priority: Optional[str] = None,
-        shop_section_id: Optional[str] = None,
+        message_link: Optional[str] = None,
+        role_id: Optional[discord.Role] = None,
         reason: Optional[str] = None
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        # Handle date parsing and CLEAR sentinel
-        start_date_parsed = safe_parse_date(start_date) if start_date else None
-        if start_date and not start_date_parsed:
-            await interaction.followup.send("❌ Invalid start date format. Use YYYY-MM-DD.")
-            return
-
-        if end_date and end_date.strip().upper() != "CLEAR":
-            end_date_parsed = safe_parse_date(end_date)
-            if not end_date_parsed:
-                await interaction.followup.send("❌ Invalid end date format. Use YYYY-MM-DD or CLEAR to remove it.")
-                return
-        else:
-            end_date_parsed = None
-
         # Check for existing event_id then update event
         with db_session() as session:
-            event = events_crud.get_event(session, event_id)
+            event = events_crud.get_event_by_key(
+                session=session, 
+                event_key=shortcode    
+            )
             if not event:
-                await interaction.followup.send(f"❌ Event `{event_id}` not found.")
+                await interaction.followup.send(f"❌ Event `{shortcode}` not found.")
                 return
 
             # Prevent editing active events							   
-            if event.active:
+            if event.event_status == EventStatus.active:
                 await interaction.followup.send("⚠️ This event is active and cannot be edited. Use a separate command to deactivate it first.")
                 return
 
-            updates = {}
+    # Handle date parsing and CLEAR sentinel
+            start_date_parsed = safe_parse_date(start_date) if start_date else None
+            if start_date and not start_date_parsed:
+                await interaction.followup.send("❌ Invalid start date format. Use YYYY-MM-DD.")
+                return
+
+            if end_date and end_date.strip().upper() != "CLEAR":
+                end_date_parsed = safe_parse_date(end_date)
+                if not end_date_parsed:
+                     await interaction.followup.send("❌ Invalid end date format. Use YYYY-MM-DD or CLEAR to remove it.")
+                     return
+            else:
+                end_date_parsed = None
+
+            event_update_data = {}
             if name: 
-                updates["name"] = name
+                event_update_data["event_name"] = name
             if description: 
-                updates["description"] = description
+                event_update_data["event_description"] = description
             if start_date_parsed: 
-                updates["start_date"] = start_date_parsed
+                event_update_data["start_date"] = start_date_parsed
             if end_date:
-                updates["end_date"] = None if end_date.strip().upper() == "CLEAR" else end_date_parsed
+                event_update_data["end_date"] = None if end_date.strip().upper() == "CLEAR" else end_date_parsed
             if coordinator: 
-                updates["coordinator_id"] = str(coordinator.id)
+                event_update_data["coordinator_discord_id"] = str(coordinator.id)
             if tags:
                 if tags.strip().upper() == "CLEAR":
-                    updates["tags"] = None
+                    event_update_data["tags"] = None
                 else:
-                    updates["tags"] = ",".join(tag.strip() for tag in tags.split(","))            
-            if embed_channel: 
-                updates["embed_channel_id"] = str(embed_channel.id)
-            if embed_message_id:
-                if embed_message_id.strip().upper() == "CLEAR":
-                    if event.visible:
-                        await interaction.followup.send("❌ You cannot remove the embed message ID while the event is visible. Hide it first.")
+                    event_update_data["tags"] = ",".join(tag.strip() for tag in tags.split(","))            
+            if message_link: 
+                if message_link.strip().upper() == "CLEAR":
+                    if event.event_status == EventStatus.visible:
+                        await interaction.followup.send("❌ You cannot remove the embed message while the event is visible. Hide it first.")
                         return
-                    updates["embed_message_id"] = None
+                    event_update_data["embed_channel_discord_id"] = None
+                    event_update_data["embed_message_discord_id"] = None
                 else:
-                    updates["embed_message_id"] = embed_message_id.strip()
+                    embed_channel_discord_id, embed_message_discord_id = parse_message_link(message_link)
+                    event_update_data["embed_channel_discord_id"] = embed_channel_discord_id
+                    event_update_data["embed_message_discord_id"] = embed_message_discord_id
             if role_id:
-                updates["role_id"] = None if role_id.strip().upper() == "CLEAR" else role_id.strip()
+                if role_id.strip().upper() == "CLEAR":
+                    event_update_data["role_discord_id"] = None 
+                else: 
+                    event_update_data["role_discord_id"] = role_id.strip()
             if priority:
                 if priority.strip().upper() == "CLEAR":
-                    updates["priority"] = 0
+                    event_update_data["priority"] = 0
                 else:
                     try:
                         val = int(priority)
                         if val < 0:
                             raise ValueError
-                        updates["priority"] = val
+                        event_update_data["priority"] = val
                     except ValueError:
                         await interaction.followup.send("❌ Priority must be a non-negative integer or CLEAR.")
                         return
-            if shop_section_id:
-                updates["shop_section_id"] = None if shop_section_id.strip().upper() == "CLEAR" else shop_section_id
 
-            if not updates:
+            if not event_update_data:
                 await interaction.followup.send("❌ No valid fields provided to update.")
                 return
 
-            updated = events_crud.update_event(
-                session,
-                event_id=event_id,
-                modified_by=str(interaction.user.id),
-                modified_at=now_iso(),
-                reason=reason,
-                **updates
+            event_update_data["modified_by"] = str(interaction.user.id)
+            
+            events_crud.update_event(
+                session=session,
+                event_key=shortcode,
+                event_update_data=event_update_data,
+                reason=reason
             )
-            if not updated:
-                await interaction.followup.send("❌ Event update failed unexpectedly.")
-                return
 
             # Extract now while session is open								   
-            safe_event_name = event.name
+            safe_event_name = event.event_name
 
         await interaction.followup.send(
-            f"✅ Event `{safe_event_name} ({event_id})` updated successfully." + (f"\n📝 Reason: {reason}" if reason else "")
+            f"✅ Event `{safe_event_name} ({shortcode})` updated successfully." + (f"\n📝 Reason: {reason}" if reason else "")
         )
 
 
     # === DELETE EVENT ===
     @admin_or_mod_check()
     @app_commands.describe(
-        event_id="ID of the event to delete",
+        shortcode="Shortcode of the event to delete",
         reason="Reason for deleting (will be logged)"
     )
     @app_commands.command(name="delete", description="Delete an event.")
     async def delete_event(
         self, 
         interaction: discord.Interaction, 
-        event_id: str, 
+        shortcode: str, 
         reason: str
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            event = events_crud.get_event(session, event_id)
+            event = events_crud.get_event_by_key(
+                session=session,
+                event_key=shortcode
+            )
             if not event:
-                await interaction.edit_original_response(content=f"❌ Event `{event_id}` not found.")
+                await interaction.edit_original_response(content=f"❌ Event `{shortcode}` not found.")
                 return
 
-            if event.active or event.visible:
-                await interaction.edit_original_response(content="⚠️ Cannot delete an event that is active or visible. Please deactivate/hide it first.")
+            if event.event_status in (EventStatus.visible, EventStatus.active):
+                await interaction.edit_original_response(content="⚠️ Cannot delete an event that is active or visible. Put the event in draft first.")
                 return
             
             # Extract now while session is open
-            safe_event_name = event.name
+            safe_event_name = event.event_name
 
         # Ask for confirmation
-        confirmed = await confirm_action(interaction, f"event `{event_id}` ({safe_event_name})", reason)
+        confirmed = await confirm_action(
+            interaction=interaction, 
+            item_name=f"event `{shortcode}` ({safe_event_name})", 
+            reason="Removal"
+        )
         if not confirmed:
             await interaction.edit_original_response(content="❌ Deletion cancelled or timed out.", view=None)
             return
 
         with db_session() as session:
-            success = events_crud.delete_event(
+            event = events_crud.delete_event(
                 session,
-                event_id=event_id,
-                deleted_by=str(interaction.user.id),
+                event_key=shortcode,
+                performed_by=str(interaction.user.id),
                 reason=reason
             )
-            if not success:
+            if not event:
                 await interaction.edit_original_response(content="❌ Event deletion failed unexpectedly.", view=None)
                 return
 
         await interaction.edit_original_response(content=f"✅ Event `{safe_event_name}` deleted.", view=None)
-
-
-    # === DISPLAY EVENT ===
-    @admin_or_mod_check()
-    @app_commands.describe(
-        event_id="Id of the event to show"
-    )
-    @app_commands.command(name="display", description="Make an event visible to users.")
-    async def display_event(
-        self, 
-        interaction: Interaction, 
-        event_id: str
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-
-        with db_session() as session:
-            event = events_crud.get_event(session, event_id)
-            if not event:
-                await interaction.followup.send(f"❌ Event `{event_id}` not found.")
-                return
-
-            if event.visible:
-                await interaction.followup.send("⚠️ This event is already visible.")
-                return
-
-            if not event.embed_message_id:
-                await interaction.followup.send(
-                    "❌ You must define the embed message before making an event visible."
-                )
-                return
-
-            event.visible = True
-            safe_event_name = event.name
-            event_role_id = event.role_id
-            
-            # Track who modified the event
-            event.modified_by = str(interaction.user.id)
-            event.modified_at = now_iso()
-            
-            general_crud.log_change(
-                session=session,
-                log_model=EventLog,
-                fk_field="event_id",
-                fk_value=event.id,
-                action="edit",
-                performed_by=event.modified_by,
-                description=f"Event {event.name} ({event.event_id}) made visible."
-            )
-        
-        # Post announcement in announcement channel
-        try:
-            announcement_channel = interaction.guild.get_channel(EVENT_ANNOUNCEMENT_CHANNEL_ID)
-            if announcement_channel:
-                msg = f"📢 The event **{safe_event_name}** is now visible to all members!"
-                # Add role ping if applicable
-                if event_role_id:
-                    msg = f"<@&{event_role_id}>\n{msg}"
-
-                await announcement_channel.send(msg)
-        except Exception as e:
-            print(f"⚠️ Failed to post activation message in channel: {e}")
-
-
-        await interaction.followup.send(f"✅ Event `{safe_event_name} ({event_id})` is now visible.")
-
-
-    # === ACTIVATE EVENT ===
-    @admin_or_mod_check()
-    @app_commands.describe(
-        event_id="ID of the event to activate (starts tracking and shows rewards)"
-    )
-    @app_commands.command(name="activate", description="Mark an event as active (and visible if needed).")
-    async def activate_event(
-        self, 
-        interaction: discord.Interaction, 
-        event_id: str
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-
-        with db_session() as session:
-            event = events_crud.get_event(session, event_id)
-            if not event:
-                await interaction.followup.send(f"❌ Event `{event_id}` not found.")
-                return
-
-            if event.active:
-                await interaction.followup.send("⚠️ This event is already active.")
-                return
-
-            if not event.embed_message_id:
-                await interaction.followup.send(
-                    "❌ Cannot activate an event without an embed message ID. Use `/admin editevent` to define one first."
-                )
-                return
-
-            event.active = True
-
-            was_visible = event.visible
-            if not event.visible:
-                event.visible = True  # auto-enable visibility
-
-            safe_event_name = event.name
-            event_role_id = event.role_id
-
-            # Track who modified the event
-            event.modified_by = str(interaction.user.id)
-            event.modified_at = now_iso()
-            
-            # Logging
-            visibility_note = " (also made visible automatically)" if not was_visible else ""
-            
-            general_crud.log_change(
-                session=session,
-                log_model=EventLog,
-                fk_field="event_id",
-                fk_value=event.id,
-                action="edit",
-                performed_by=str(interaction.user.id),
-                description=f"Event {event.name} ({event.event_id}) marked as active{visibility_note}."
-            )
-             
-            # Post announcement in announcement channel
-        try:
-            announcement_channel = interaction.guild.get_channel(EVENT_ANNOUNCEMENT_CHANNEL_ID)
-            if announcement_channel:
-                msg = f"🎉 The event **{safe_event_name}** is now **active**!\nMembers can submit actions and browse the event rewards in the shop."
-                # Add role ping if applicable
-                if event_role_id:
-                    msg = f"<@&{event_role_id}>\n{msg}"
-                await announcement_channel.send(msg)
-        except Exception as e:
-            print(f"⚠️ Failed to post activation message in channel: {e}")
-
-        await interaction.followup.send(f"✅ Event `{safe_event_name} ({event_id})` marked as active{visibility_note}.")
-
-
-    # === DEACTIVATE EVENT ===
-    @admin_or_mod_check()
-    @app_commands.describe(
-        event_id="ID of the event to deactivate (ends tracking and disables rewards)"
-    )
-    @app_commands.command(name="deactivate", description="Mark an event as inactive (tracking ends, still visible).")
-    async def deactivate_event(
-        self, 
-        interaction: discord.Interaction, 
-        event_id: str
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
     
-        with db_session() as session:
-            event = events_crud.get_event(session, event_id)
-            if not event:
-                await interaction.followup.send(f"❌ Event `{event_id}` not found.")
-                return
-    
-            if not event.active:
-                await interaction.followup.send("⚠️ This event is already inactive.")
-                return
-    
-            event.active = False
-            safe_event_name = event.name
-            event_role_id = event.role_id
-
-            # Track who modified the event
-            event.modified_by = str(interaction.user.id)
-            event.modified_at = now_iso()
-    
-            general_crud.log_change(
-                session=session,
-                log_model=EventLog,
-                fk_field="event_id",
-                fk_value=event.id,
-                action="edit",
-                performed_by=str(interaction.user.id),
-                description=f"Event {event.name} ({event.event_id}) marked as inactive."
-            )
-    
-        # Post announcement
-        try:
-            announcement_channel = interaction.guild.get_channel(EVENT_ANNOUNCEMENT_CHANNEL_ID)
-            if announcement_channel:
-                msg = f"📢 **{safe_event_name}** is now **closed**. Thank you all for participating! 🎉\nLeaderboard and history remain accessible."
-                # Add role ping if applicable
-                if event_role_id:
-                    msg = f"<@&{event_role_id}>\n{msg}"
-                await announcement_channel.send(msg)
-        except Exception as e:
-            print(f"⚠️ Failed to post deactivation message: {e}")
-    
-        await interaction.followup.send(f"✅ Event `{safe_event_name} ({event_id})` marked as inactive.")
-    
-    
-    # === HIDE EVENT ===
-    @admin_or_mod_check()
-    @app_commands.describe(event_id="ID of the event to hide (removes from public views)")
-    @app_commands.command(name="hide", description="Hide an event from users (must not be active).")
-    async def hide_event(self, interaction: discord.Interaction, event_id: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-    
-        with db_session() as session:
-            event = events_crud.get_event(session, event_id)
-            if not event:
-                await interaction.followup.send(f"❌ Event `{event_id}` not found.")
-                return
-    
-            if event.active:
-                await interaction.followup.send("❌ You must deactivate the event before hiding it.")
-                return
-    
-            if not event.visible:
-                await interaction.followup.send("⚠️ This event is already hidden.")
-                return
-    
-            event.visible = False
-            safe_event_name = event.name
-
-            # Track who modified the event
-            event.modified_by = str(interaction.user.id)
-            event.modified_at = now_iso()
-    
-            general_crud.log_change(
-                session=session,
-                log_model=EventLog,
-                fk_field="event_id",
-                fk_value=event.id,
-                action="edit",
-                performed_by=str(interaction.user.id),
-                description=f"Event {event.name} ({event.event_id}) marked as hidden."
-            )
-    
-        await interaction.followup.send(f"✅ Event `{safe_event_name} ({event_id})` is now hidden from users.")
-
 
     # === LIST EVENTS ===
     @admin_or_mod_check()
     @app_commands.describe(
         tag="Filter by tag (optional)",
-        active="Only show active events",
-        visible="Only show visible events",
-        mod="Only show events created or edited by this mod"
+        event_status="Filter by status",
+        moderator="Only show events created or edited by this moderator"
+    )
+    @app_commands.choices(
+        event_status=[
+            app_commands.Choice(name="Draft", value="draft"),
+            app_commands.Choice(name="Visible", value="visible"),
+            app_commands.Choice(name="Active", value="active"),
+            app_commands.Choice(name="Archived", value="archived")
+        ]
     )
     @app_commands.command(name="list", description="List all events with filters")
     async def list_events(
         self,
         interaction: Interaction,
         tag: Optional[str] = None,
-        active: Optional[bool] = None,
-        visible: Optional[bool] = None,
-        mod: Optional[discord.User] = None,
+        event_status: Optional[app_commands.Choice[str]] = None,
+        moderator: Optional[discord.User] = None,
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        mod_id = str(mod.id) if mod else None
-
+        mod_by_discord_id = str(moderator.id) if moderator else None
+        status_value = event_status.value if event_status else None
+        
         with db_session() as session:
             events = events_crud.get_all_events(
                 session,
                 tag=tag,
-                active=active,
-                visible=visible,
-                mod_id=mod_id
+                event_status = status_value,
+                mod_by_discord_id=mod_by_discord_id
             )
 
             if not events:
@@ -575,75 +367,86 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
             pages = []
             for i in range(0, len(events), EVENTS_PER_PAGE):
                 chunk = events[i:i+EVENTS_PER_PAGE]
-                description_text = f"🔍 Tag: `{tag}`\n" if tag else None
+                description_text = f"🔍 Tag: `{tag}`\n" if tag else  ""
                 embed = Embed(title=f"🗂️ Events List ({i+1}-{i+len(chunk)}/{len(events)})", description=description_text)
                 for e in chunk:
                     updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
                     formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
                     lines = [
-                        f"**ID:** `{e.event_id}` | **Name:** {e.name}",
+                        f"**Shortcode:** `{e.event_key}` | **Name:** {e.event_name}",
                         f"👤 Last updated by: {updated_by}",
                         f":timer: On: {formatted_time}",
-                        f"🔎 Visible: {'✅' if e.visible else '❌'} | 🎉 Active: {'✅' if e.active else '❌'} | 📎 Embed: {'✅' if e.embed_message_id else '❌'} | 🎭 Role: {'✅' if e.role_id else '❌'}",
+                        f"📌 Status: {e.event_status.value.capitalize()} | 📎 Embed: {'✅' if e.embed_message_discord_id else '❌'} | 🎭 Role: {'✅' if e.role_discord_id else '❌'}",
                     ]
                     embed.add_field(name="\n", value="\n".join(lines), inline=False)
                 pages.append(embed)
     
             await paginate_embeds(interaction, pages)
 
-
-
+    
     # === SHOW EVENT METADATA ===
     @admin_or_mod_check()
     @app_commands.describe(
-        event_id="ID of the event to show in detail"
+        shortcode="Shortcode of the event to show in detail"
     )
     @app_commands.command(name="show", description="Display full metadata of a specific event.")
-    async def show_event(self, interaction: Interaction, event_id: str):
+    async def show_event(
+        self, 
+        interaction: Interaction, 
+        shortcode: str
+    ):
         await interaction.response.defer(thinking=True, ephemeral=True)
     
         with db_session() as session:
-            event = events_crud.get_event(session, event_id)
+            event = events_crud.get_event_by_key(
+                session=session, 
+                event_key=shortcode)
             if not event:
-                await interaction.followup.send(f"❌ Event `{event_id}` not found.", ephemeral=True)
+                await interaction.followup.send(f"❌ Event `{shortcode}` not found.", ephemeral=True)
                 return
 
             end_date = event.end_date or "*Ongoing*"
-            visible_status = "✅" if event.visible else "❌"
-            active_status = "✅" if event.active else "❌"
-            role_status = "✅" if event.role_id else "❌"
-            embed_status = "✅" if event.embed_message_id else "❌"
+            status_icons = {
+                "draft": "📝 Draft",
+                "visible": "🔎 Visible",
+                "active": "🎉 Active",
+                "archived": "📦 Archived"
+            }
+            event_status = status_icons.get(event.event_status.value, event.event_status.value.capitalize())
+            event_type = event.event_type.capitalize()
+            role_status = "✅" if event.role_discord_id else "❌"
+            embed_status = "✅" if event.embed_message_discord_id else "❌"
+            coordinator_display = f"<@{event.coordinator_discord_id}>" if event.coordinator_discord_id else "*None*"
+
             tag_display = event.tags if event.tags else "*None*"
-            description = event.description if event.description else "*No description*"    
-            shop_section = event.shop_section_id if event.shop_section_id else "*None*"
+            description = event.event_description if event.event_description else "*No description*"
             priority = str(event.priority)
             created_edited = f"By: <@{event.created_by}> at {format_discord_timestamp(event.created_at)}"
             if event.modified_by :
                 created_edited = f"{created_edited}\nLast: <@{event.modified_by}> at {format_discord_timestamp(event.modified_at)}"
             
-            embed = Embed(title=f"📋 Event Details: {event.name}", color=0x7289DA)
-            embed.add_field(name="🆔 ID", value=event.event_id, inline=False)  
+            embed = Embed(title=f"📋 Event Details: {event.event_name}", color=0x7289DA)
+            embed.add_field(name="🆔 Shortcode", value=event.event_key, inline=False)  
             embed.add_field(name="📅 Dates", value=f"Start: {event.start_date}\nEnd: {end_date}", inline=True)
-            embed.add_field(name="🔎 Visible", value=visible_status, inline=True)
-            embed.add_field(name="🎉 Active", value=active_status, inline=True)
+            embed.add_field(name="📌 Status", value=event_status, inline=True)
+            embed.add_field(name="🎉 Type", value=event_type, inline=True)
 
-            embed.add_field(name="👤 Coordinator", value=f"<@{event.coordinator_id}>", inline=True)          
-            embed.add_field(name="🎭 Role", value=embed_status, inline=True)
-            embed.add_field(name="🧵 Embed?", value=role_status, inline=True)
-
-            embed.add_field(name="🛒 Shop Section", value=shop_section, inline=True)
+            embed.add_field(name="👤 Coordinator", value=coordinator_display, inline=True)       
+            
+            embed.add_field(name="🎭 Role", value=role_status, inline=True)
+            embed.add_field(name="🧵 Embed?", value=embed_status, inline=True)
             embed.add_field(name="⭐ Priority", value=priority, inline=True)
             embed.add_field(name=" ", value="", inline=True)
 
             embed.add_field(name="🏷️ Tags", value=tag_display, inline=False)
             embed.add_field(name="✏️ Description", value=description, inline=False)
-            if event.embed_message_id:
-                jump_link = f"https://discord.com/channels/{interaction.guild.id}/{event.embed_channel_id}/{event.embed_message_id}"
+            if event.embed_message_discord_id and interaction.guild:
+                jump_link = f"https://discord.com/channels/{interaction.guild.id}/{event.embed_channel_discord_id}/{event.embed_message_discord_id}"
                 embed.add_field(name="🔗 Embed Link", value=f"[Jump to Embed]({jump_link})", inline=False)
             
             embed.add_field(name="👩‍💻 Created / Edited By", value=created_edited, inline=False)
     
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed)
 
 
     # === EVENT LOGS ===
@@ -663,8 +466,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         
         with db_session() as session:
             logs = events_crud.get_event_logs(
-                session,
-                action=action,
+                session=session,
+                log_action=action,
                 performed_by=str(moderator.id) if moderator else None
             )
     
@@ -680,18 +483,108 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                     color=discord.Color.orange()
                 )
                 for log in chunk:
-                    label = f"Event `{log.event_id}`" if log.event_id else "Deleted Event"
+                    label = f"Event `{log.event_key}`" if log.event_key else "Deleted Event"
                     entry_str = format_log_entry(
-                        action=log.action,
+                        log_action=log.log_action,
                         performed_by=log.performed_by,
-                        timestamp=log.timestamp,
-                        description=log.description,
+                        performed_at=log.performed_at,
+                        log_description=log.log_description,
                         label=label
                     )
                     embed.add_field(name="\n", value=entry_str, inline=False)
                 pages.append(embed)
         
             await paginate_embeds(interaction, pages)
+
+
+    # === SET EVENT STATUS ===
+    @admin_or_mod_check()
+    @app_commands.describe(
+        shortcode="Shortcode of the event",
+        event_status="New status: draft, visible, active, archived"
+    )
+    @app_commands.choices(
+        event_status=[
+            app_commands.Choice(name="Draft", value="draft"),
+            app_commands.Choice(name="Visible", value="visible"),
+            app_commands.Choice(name="Active", value="active"),
+            app_commands.Choice(name="Archived", value="archived")
+        ]
+    )
+    @app_commands.command(name="setstatus", description="Change the lifecycle status of an event.")
+    async def set_event_status_cmd(
+        self,
+        interaction: discord.Interaction,
+        shortcode: str,
+        event_status: app_commands.Choice[str]
+    ):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        new_status = EventStatus(event_status.value)
+        
+        with db_session() as session:
+            
+            event = events_crud.get_event_by_key(
+                session=session, 
+                event_key=shortcode
+            )
+            if not event:                
+                await interaction.followup.send(f"❌ Event `{shortcode}` not found.", ephemeral=True)
+                return            
+
+            old_status = event.event_status
+            
+            # Validation logic
+            allowed_transitions = {
+                EventStatus.draft: [EventStatus.visible],
+                EventStatus.visible: [EventStatus.active, EventStatus.draft],
+                EventStatus.active: [EventStatus.archived, EventStatus.visible, EventStatus.draft],
+                EventStatus.archived: []
+            }
+
+            if new_status not in allowed_transitions[old_status]:
+                await interaction.followup.send(
+                    f"❌ Cannot move from {old_status.value} to {new_status.value}."
+                )
+                return
+    
+            if new_status == EventStatus.visible and not event.embed_message_discord_id:
+                await interaction.followup.send("❌ You must define the embed message before making an event visible.")
+                return
+
+            status_update_data = {
+                "event_status": new_status,
+                "modified_by": str(interaction.user.id)
+            }
+
+            event = events_crud.set_event_status(
+                session=session,
+                event_key=shortcode,
+                status_update_data=status_update_data
+            )
+
+            safe_event_name = event.event_name
+            role_discord_id = event.role_discord_id
+
+            # Announcement messages
+            msg = None
+            if old_status == EventStatus.draft and new_status == EventStatus.visible:
+                msg = f"📢 The event **{safe_event_name}** is now visible to all members!"
+            elif old_status == EventStatus.visible and new_status == EventStatus.active:
+                msg = f"🎉 The event **{safe_event_name}** is now **active**!\nMembers can submit actions and browse the event rewards in the shop."
+            elif old_status == EventStatus.active and new_status == EventStatus.archived:
+    # Announcement messages
+                msg = f"📢 **{safe_event_name}** is now **closed**. Thank you all for participating! 🎉\nLeaderboard and history remain accessible."
+    
+            if msg:
+                await post_announcement_message(
+                    interaction=interaction,
+                    announcement_channel_id=EVENT_ANNOUNCEMENT_CHANNEL_ID,
+                    msg=msg,
+                    role_discord_id=role_discord_id
+                )
+
+        await interaction.followup.send(f"✅ Event `{safe_event_name}` status changed to **{new_status.value}**.")
 
 
 # === Setup Function ===

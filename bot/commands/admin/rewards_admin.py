@@ -4,8 +4,8 @@ from discord.ext import commands
 from typing import Optional
 
 from bot.crud import rewards_crud
-from bot.config import REWARDS_PER_PAGE, LOGS_PER_PAGE, REWARD_PRESET_CHANNEL_ID, REWARD_PRESET_ARCHIVE_CHANNEL_ID
-from bot.utils import admin_or_mod_check, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, now_unix
+from bot.config import REWARDS_PER_PAGE, LOGS_PER_PAGE, REWARD_PRESET_CHANNEL_ID, REWARD_PRESET_ARCHIVE_CHANNEL_ID, EMOJI_REGEX, BADGE_TYPES, STACKABLE_TYPES, PUBLISHABLE_REWARD_TYPES
+from bot.utils import admin_or_mod_check, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, now_unix, parse_message_link
 from db.database import db_session
 
 
@@ -15,102 +15,145 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
     def __init__(self, bot):
         self.bot = bot
 
-    # === HELPER: Auto-prefix reward IDs ===
-    def ensure_reward_prefix(self, reward_id: str, reward_type: str) -> str:
-        """Ensures the reward_id has the correct prefix for its type."""
+    
+    # === HELPERS ===
+    # Auto-prefix reward keys
+    @staticmethod
+    def ensure_reward_prefix(
+        reward_key: str, 
+        reward_type: str
+    ) -> str:
+        """Ensures the reward_key has the correct prefix for its type."""
+        
         prefix_map = {
             "title": "t_",
             "badge": "b_",
-            "preset": "p_"
+            "preset": "p_",
+            "dynamic": "d_"
         }
         prefix = prefix_map.get(reward_type.lower())
-        if prefix and not reward_id.lower().startswith(prefix):
-            return f"{prefix}{reward_id}"
-        return reward_id
+        
+        if prefix and not reward_key.lower().startswith(prefix):
+            return f"{prefix}{reward_key}"
+        return reward_key
 
+        
+    # Check emoji is valid
+    @staticmethod
+    def is_valid_emoji(
+        value: Optional[str]
+    ) -> bool:
+        """Check if the given value is a valid emoji (Unicode or Discord custom)."""
+
+        if not value:
+            return False
+        else:
+            return bool(EMOJI_REGEX.match(value))
+
+    
     # === CREATE REWARD ===
     @admin_or_mod_check()
     @app_commands.describe(
-        reward_id="Shortcode for the reward (prefix auto-added: t_, b_, p_ depending on type)",
+        shortcode="Shortcode for the reward (prefix auto-added: b_, d_, p_, t_ depending on type)",
         reward_type="Type of reward: title, badge, preset",
-        reward_name="Display name of the reward",
+        name="Display name of the reward",
         description="Optional description for the reward",
         emoji="Optional emoji for badge rewards (required if type=badge)",
         stackable="Whether this reward can stack in inventory (default: False)"
     )
+    @app_commands.rename(reward_type="type")
     @app_commands.command(name="create", description="Create a new reward.")
     async def create_reward(
         self,
         interaction: Interaction,
-        reward_id: str,
+        shortcode: str,
         reward_type: str,
-        reward_name: str,
+        name: str,
         description: Optional[str] = None,
         emoji: Optional[str] = None,
         stackable: Optional[bool] = False
     ):
+        """Create a new reward with the given details."""
+        
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         # Ensure correct prefix for the type
-        reward_id = self.ensure_reward_prefix(reward_id, reward_type)
+        reward_key = self.ensure_reward_prefix(shortcode, reward_type)
 
         # Enforce emoji requirement for badges
-        if reward_type.lower() == "badge" and not emoji:
+        if reward_type.lower() == "badge" and not self.is_valid_emoji(emoji):
             await interaction.followup.send("❌ Badge rewards must have an emoji.")
             return
+            
+        # Enforce emoji rule
+        if reward_type.lower() not in BADGE_TYPES:
+            emoji = None
+
+        # Enforce stackable rule
+        if reward_type.lower() not in STACKABLE_TYPES:
+            stackable = False
 
         with db_session() as session:
-            if rewards_crud.get_reward(session, reward_id):
-                await interaction.followup.send(f"❌ Reward `{reward_id}` already exists.")
+            if rewards_crud.get_reward_by_key(
+                session=session, 
+                reward_key=shortcode
+            ):
+                await interaction.followup.send(f"❌ Reward `{reward_key}` already exists.")
                 return
 
+            reward_create_data={
+                "reward_key": reward_key,
+                "reward_type": reward_type.lower(),
+                "reward_name": name,
+                "reward_description": description,
+                "emoji": emoji,
+                "is_stackable": stackable,
+                "created_by": str(interaction.user.id)
+            }
+            
             rewards_crud.create_reward(
-                session,
-                reward_data={
-                    "reward_id": reward_id,
-                    "reward_type": reward_type.lower(),
-                    "reward_name": reward_name,
-                    "description": description,
-                    "emoji": emoji,
-                    "stackable": stackable,
-                    "created_by": str(interaction.user.id)
-                },
-                performed_by=str(interaction.user.id)
+                session=session,
+                reward_create_data=reward_create_data
             )
 
-        await interaction.followup.send(f"✅ Reward `{reward_name}` created with ID `{reward_id}`.")
+        await interaction.followup.send(f"✅ Reward `{name}` created with shortcode `{reward_key}`.")
 
 
     # === EDIT REWARD ===
     @admin_or_mod_check()
     @app_commands.describe(
-        reward_id="ID of the reward to edit",
+        shortcode="Shortcode (with the prefix) of the reward to edit",
         name="New name for the reward (optional)",
         description="New description for the reward (optional)",
         emoji="New emoji (optional)",
         stackable="Set True/False to change stackability (optional)",
+        reason="Optional reason for editing (will be logged)",
         force="Override restrictions for active events"
     )
     @app_commands.command(name="edit", description="Edit an existing reward.")
     async def edit_reward(
         self,
         interaction: Interaction,
-        reward_id: str,
+        shortcode: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
         emoji: Optional[str] = None,
         stackable: Optional[bool] = None,
+        reason: Optional[str] = None,
         force: bool = False
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
-
+        
         with db_session() as session:
-            reward = rewards_crud.get_reward(session, reward_id)
+            reward = rewards_crud.get_reward_by_key(
+                session=session, 
+                reward_key=shortcode
+            )
             if not reward:
-                await interaction.followup.send(f"❌ Reward `{reward_id}` not found.")
+                await interaction.followup.send(f"❌ Reward `{shortcode}` not found.")
                 return
 
-            if rewards_crud.reward_is_linked_to_active_event(session, reward_id):
+            if rewards_crud.reward_is_linked_to_active_event(session, shortcode):
                 blocked_fields = any([
                     name is not None,
                     stackable is not None,
@@ -126,76 +169,116 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 if force:
                     confirmed = await confirm_action(
                         interaction,
-                        f"reward `{reward_id}` linked to an ACTIVE event",
+                        f"reward `{shortcode}` linked to an ACTIVE event",
                         "⚠️ **FORCED OVERRIDE** — this may impact participants!")
                     if not confirmed:
                         return
 
-            updates = {}
-            if name:
-                updates["reward_name"] = name
-            if description is not None:
-                updates["description"] = description
-            if emoji is not None:
-                updates["emoji"] = emoji
-            if stackable is not None:
-                updates["stackable"] = stackable
+            # Enforce emoji rule
+            if reward.reward_type.lower() not in BADGE_TYPES:
+                emoji = None
+                # Enforce emoji requirement for badges
+            if reward.reward_type.lower() in BADGE_TYPES and not self.is_valid_emoji(emoji):
+                await interaction.followup.send("❌ Badge rewards must have a valid emoji.")
+                return
 
-            if not updates:
+            # Enforce stackable rule
+            if reward.reward_type.lower() not in STACKABLE_TYPES:
+                stackable = False
+                
+            reward_update_data = {}
+            if name:
+                reward_update_data["reward_name"] = name
+            if description is not None:
+                reward_update_data["reward_description"] = description
+            if emoji is not None:
+                reward_update_data["emoji"] = emoji
+            if stackable is not None:
+                reward_update_data["is_stackable"] = stackable
+
+            if not reward_update_data:
                 await interaction.followup.send("❌ No valid fields provided to update.")
                 return
 
+            reward_update_data["modified_by"] = str(interaction.user.id)
+            
             rewards_crud.update_reward(
-                session,
-                reward_id=reward_id,
-                updates=updates,
-                performed_by=str(interaction.user.id)
+                session=session,
+                reward_key=shortcode,
+                reward_update_data=reward_update_data,
+                reason=reason,
+                forced=force
             )
 
-        await interaction.followup.send(f"✅ Reward `{reward_id}` updated successfully.")
+        await interaction.followup.send(f"✅ Reward `{shortcode}` updated successfully.")
 
 
     # === DELETE REWARD ===
     @admin_or_mod_check()
     @app_commands.describe(
-        reward_id="ID of the reward to delete",
+        shortcode="Shortcode (with the prefix) of the reward to delete",
+        reason="Reason for deleting (will be logged)",
         force="Override restrictions for active events"
     )
     @app_commands.command(name="delete", description="Delete a reward.")
-    async def delete_reward(self, interaction: Interaction, reward_id: str,
-                           force: bool = False):
+    async def delete_reward(
+        self, 
+        interaction: Interaction, 
+        shortcode: str,
+        reason: str,
+        force: bool = False
+    ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            reward = rewards_crud.get_reward(session, reward_id)
+            reward = rewards_crud.get_reward_by_key(
+                session=session, 
+                reward_key=shortcode
+            )
+            
             if not reward:
-                await interaction.followup.send(f"❌ Reward `{reward_id}` not found.")
+                await interaction.followup.send(f"❌ Reward `{shortcode}` not found.")
                 return
 
-        confirmed = await confirm_action(interaction, f"reward `{reward_id}`", "Removal")
+        confirmed = await confirm_action(
+            interaction=interaction, 
+            item_name=f"reward `{shortcode}`", 
+            reason="Removal"
+        )
+        
         if not confirmed:
             await interaction.edit_original_response(content="❌ Deletion cancelled or timed out.", view=None)
 
-            if rewards_crud.reward_is_linked_to_active_event(session, reward_id):
+            if rewards_crud.reward_is_linked_to_active_event(
+                session=session, 
+                reward_key=shortcode
+            ):
                 if not force:
                     await interaction.followup.send(
                         "❌ Cannot delete a reward linked to an active event without `--force`."
                     )
                     return
                 confirmed = await confirm_action(
-                    interaction,
-                    f"reward `{reward_id}` linked to an ACTIVE event",
-                    "⚠️ **FORCED DELETE** — this will impact participants!"
-                    )
+                    interaction=interaction,
+                    item_name=f"reward `{shortcode}` linked to an ACTIVE event",
+                    reason="⚠️ **FORCED DELETE** — this will impact participants!"
+                )
+                
                 if not confirmed:
                     return
 
             return
 
         with db_session() as session:
-            rewards_crud.delete_reward(session, reward_id, performed_by=str(interaction.user.id))
+            rewards_crud.delete_reward(
+                session=session,
+                reward_key=shortcode,
+                performed_by=str(interaction.user.id),
+                reason=reason,
+                forced=force
+            )
 
-        await interaction.edit_original_response(content=f"✅ Reward `{reward_id}` deleted.", view=None)
+        await interaction.edit_original_response(content=f"✅ Reward `{shortcode}` deleted.", view=None)
 
 
     # === LIST REWARDS ===
@@ -215,14 +298,14 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        mod_id = str(mod.id) if mod else None
+        mod_by_discord_id = str(mod.id) if mod else None
 
         with db_session() as session:
             rewards = rewards_crud.get_all_rewards(
-                session,
-                type=type,
-                mod_id=mod_id,
-                name=name
+                session=session,
+                reward_type=type,
+                mod_by_discord_id=mod_by_discord_id,
+                reward_name=name
             )
 
             if not rewards:
@@ -237,7 +320,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     updated_by = f"<@{r.modified_by}>" if r.modified_by else f"<@{r.created_by}>"
                     formatted_time = format_discord_timestamp(r.modified_at or r.created_at)
                     lines = [
-                        f"**ID:** `{r.reward_id}` | **Name:** {r.reward_name} | **Type:** {r.reward_type}",
+                        f"**Shortcode:** `{r.reward_key}` | **Name:** {r.reward_name} | **Type:** {r.reward_type}",
                         f"👤 Last updated by: {updated_by}",
                         f"🕒 On: {formatted_time}",
                     ]
@@ -250,16 +333,23 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
     # === SHOW REWARD DETAILS ===
     @admin_or_mod_check()
     @app_commands.describe(
-        reward_id="ID of the reward to view in detail"
+        shortcode="Shortcode (with the prefix) of the reward to view in detail"
     )
     @app_commands.command(name="show", description="Show full details of a reward.")
-    async def show_reward(self, interaction: Interaction, reward_id: str):
+    async def show_reward(
+        self, 
+        interaction: Interaction, 
+        shortcode: str
+    ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            reward = rewards_crud.get_reward(session, reward_id)
+            reward = rewards_crud.get_reward_by_key(
+                session=session, 
+                reward_key=shortcode
+        )
             if not reward:
-                await interaction.followup.send(f"❌ Reward `{reward_id}` not found.")
+                await interaction.followup.send(f"❌ Reward `{shortcode}` not found.")
                 return
 
             created_edited = f"By: <@{reward.created_by}> at {format_discord_timestamp(reward.created_at)}"
@@ -272,10 +362,10 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
             )
 
             # Always visible
-            embed.add_field(name="🆔 ID", value=reward.reward_id, inline=True)
+            embed.add_field(name="🆔 Shortcode", value=reward.reward_key, inline=True)
             embed.add_field(name="📂 Type", value=reward.reward_type, inline=True)
             embed.add_field(name="📈 Number Granted", value=str(reward.number_granted), inline=True)
-            embed.add_field(name="✏️ Description", value=reward.description or "*None*", inline=False)
+            embed.add_field(name="✏️ Description", value=reward.reward_description or "*None*", inline=False)
 
             # Badge-specific
             if reward.reward_type == "badge":
@@ -283,11 +373,11 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
             # Preset-specific
             if reward.reward_type == "preset":
-                embed.add_field(name="📦 Stackable", value="✅" if reward.stackable else "❌", inline=True)
+                embed.add_field(name="📦 Stackable", value="✅" if reward.is_stackable else "❌", inline=True)
 
-                if reward.use_channel_id and reward.use_message_id:
-                    link = f"https://discord.com/channels/{interaction.guild.id}/{reward.use_channel_id}/{reward.use_message_id}"
-                    embed.add_field(name="📢 Preset Channel", value=f"<#{reward.use_channel_id}>", inline=True)
+                if reward.use_channel_discord_id and reward.use_message_discord_id:
+                    link = f"https://discord.com/channels/{interaction.guild.id}/{reward.use_channel_discord_id}/{reward.use_message_discord_id}"
+                    embed.add_field(name="📢 Preset Channel", value=f"<#{reward.use_channel_discord_id}>", inline=True)
                     embed.add_field(name="🔗 Preset Message", value=f"[View Preset]({link})", inline=True)
                 else:
                     embed.add_field(name="📢 Preset Channel", value="*Not Published*", inline=True)
@@ -295,7 +385,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
             embed.add_field(name="👩‍💻 Created / Edited By", value=created_edited, inline=False)
 
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed)
 
 
     # === REWARD LOGS ===
@@ -315,8 +405,8 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
         with db_session() as session:
             logs = rewards_crud.get_reward_logs(
-                session,
-                action=action,
+                session=session,
+                log_action=action,
                 performed_by=str(moderator.id) if moderator else None
             )
 
@@ -334,10 +424,10 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 for log in chunk:
                     label = f"Reward `{log.reward_id}`" if log.reward_id else "Deleted Reward"
                     entry_str = format_log_entry(
-                        action=log.action,
+                        log_action=log.log_action,
                         performed_by=log.performed_by,
-                        timestamp=log.timestamp,
-                        description=log.description,
+                        performed_at=log.performed_at,
+                        log_description=log.log_description,
                         label=label
                     )
                     embed.add_field(name="\n", value=entry_str, inline=False)
@@ -349,47 +439,51 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
     # === PUBLISH PRESET ===
     @admin_or_mod_check()
     @app_commands.describe(
-        reward_id="ID of the reward to link the preset to",
+        shortcode="Shortcode (with the prefix) of the reward to link the preset to",
         message_link="Link to the message containing the preset content",
         force="Override restrictions for active events"
     )
-    @app_commands.command(
-        name="publishpreset",
-        description="Publish a reward preset to the official preset channel."
+    @app_commands.command(name="publishpreset", description="Publish a reward preset to the official preset channel."
     )
     async def publish_preset(
         self,
         interaction: discord.Interaction,
-        reward_id: str,
+        shortcode: str,
         message_link: str,
         force: bool = False
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         # 1️⃣ Parse message link
-        try:
-            parts = message_link.strip().split("/")
-            channel_id = int(parts[-2])
-            message_id = int(parts[-1])
-        except Exception:
-            await interaction.followup.send("❌ Invalid message link format.")
-            return
-
+        channel_id, message_id = parse_message_link(message_link)
+   
         # 2️⃣ Fetch reward & save old IDs
         with db_session() as session:
-            reward = rewards_crud.get_reward(session, reward_id)
+            reward = rewards_crud.get_reward_by_key(
+                session=session, 
+                reward_key=shortcode
+            )
             if not reward:
-                await interaction.followup.send(f"❌ Reward `{reward_id}` not found.")
+                await interaction.followup.send(f"❌ Reward `{shortcode}` not found.")
                 return
 
-            header_id_old = reward.use_header_message_id
-            preset_id_old = reward.use_message_id
+            if reward.reward_type.lower() not in PUBLISHABLE_REWARD_TYPES:
+                await interaction.followup.send(
+                    f"❌ Reward `{shortcode}` is not a publishable type of reward."
+                )
+                return
+
+            header_id_old = reward.use_header_message_discord_id
+            preset_id_old = reward.use_message_discord_id
             reward_name = reward.reward_name
-            reward_code = reward.reward_id
-            preset_set_at = reward.preset_set_at
+            reward_key = reward.reward_key
+            preset_at = reward.preset_at
 
             # Check active event rule
-            if rewards_crud.reward_is_linked_to_active_event(session, reward_id):
+            if rewards_crud.reward_is_linked_to_active_event(
+                session=session, 
+                reward_key=reward_key
+            ):
                 if reward.use_message_id and not force:
                     await interaction.followup.send(
                         "❌ Cannot re-publish a preset for a reward linked to an active event without `--force`."
@@ -398,7 +492,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 if force:
                     confirmed = await confirm_action(
                         interaction,
-                        f"reward `{reward_id}` linked to an ACTIVE event",
+                        f"reward `{reward_key}` linked to an ACTIVE event",
                         "⚠️ **FORCED REPUBLISH** — participants may see changed content!"
                     )
                     if not confirmed:
@@ -416,8 +510,8 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     # Archive header
                     await archive_channel.send(
                         content=(
-                            f"📦 **Archived Header** for `{reward_name}` (`{reward_code}`)\n"
-                            f"*Originally published on:* {preset_set_at or 'Unknown'}\n\n"
+                            f"📦 **Archived Header** for `{reward_name}` (`{reward_key}`)\n"
+                            f"*Originally published on:* {preset_at or 'Unknown'}\n\n"
                             f"{old_header.content or ''}"
                         ),
                         embeds=old_header.embeds,
@@ -425,7 +519,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     )
 
                     # Archive clean preset
-                    content_text = f"📦 **Archived Preset Content** for `{reward_name}` (`{reward_code}`)"
+                    content_text = f"📦 **Archived Preset Content** for `{reward_name}` (`{reward_key}`)"
                     content_text = f"{content_text} \n{old_preset.content}"
                     await archive_channel.send(
                         content=content_text,
@@ -440,7 +534,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
             except Exception as e:
                 print(f"⚠️ Failed to archive/delete old preset: {e}")
         else:
-            print(f"No old preset to archive for {reward_code} — this is the first publish.")
+            print(f"No old preset to archive for `{reward_key}` — this is the first publish.")
 
         # 4️⃣ Fetch the NEW preset message from the link
         try:
@@ -458,7 +552,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
         header_text = (
             f"🏆 **Reward Preset Published**\n"
-            f"**Reward:** {reward_name} (`{reward_code}`)\n"
+            f"**Reward:** `{reward_name}` (`{reward_key}`)\n"
             f"**Published by:** <@{interaction.user.id}>\n"
             f"**Date:** <t:{now_unix()}:F>"
         )
@@ -483,17 +577,15 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
         with db_session() as session:
             rewards_crud.publish_preset(
                 session=session,
-                reward_id=reward_id,
-                use_channel_id=REWARD_PRESET_CHANNEL_ID,
-                use_message_id=new_clean.id,           # clean preset
-                use_header_message_id=new_header.id,   # header
-                set_by=str(interaction.user.id)
+                reward_key=reward_key,
+                use_channel_discord_id=REWARD_PRESET_CHANNEL_ID,
+                use_message_discord_id=new_clean.id,           # clean preset
+                use_header_message_discord_id=new_header.id,   # header
+                set_by_discord_id=str(interaction.user.id)
             )
 
         # 8️⃣ Confirm to mod
-        await interaction.followup.send(f"✅ Preset published for reward `{reward_name}`.")
-
-
+        await interaction.followup.send(f"✅ Preset published for reward `{reward_name}` (`{reward_key}`).")
 
 
 # Future commands to implement:
@@ -507,9 +599,6 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 # /admin_reward listmedia → View all stored media for a reward.
 
 # /admin_reward deletemedia → Remove a media entry.
-
-
-
 
 
 async def setup(bot):

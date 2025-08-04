@@ -6,11 +6,11 @@ from db.schema import ActionEvent, Action, ActionEventLog, Event
 
 
 # --- GET ---
-def get_action_event_by_flavor_key(
+def get_action_event_by_key(
     session, 
-    flavor_key
+    action_event_key
 ):
-    return session.query(ActionEvent).filter_by(id=flavor_key).first()
+    return session.query(ActionEvent).filter_by(action_event_key=action_event_key).first()
 
 def get_action_events_for_event(
     session, 

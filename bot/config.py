@@ -1,4 +1,5 @@
 import os
+import re
 
 ENV = os.getenv("ENV", "dev").lower()
 
@@ -50,3 +51,17 @@ ACTIONS_PER_PAGE = 5           # Admin action listing
 EVENTS_PER_PAGE = 5            # Event listing
 REWARDS_PER_PAGE = 5           # Shop reward listing
 LOGS_PER_PAGE = 5              # Event/user logs
+
+# Matches standard Unicode emoji OR Discord custom emoji format
+EMOJI_REGEX = re.compile(
+    r"^<a?:\w+:\d+>$"  # Discord custom emoji
+    r"|"
+    r"^[\U0001F300-\U0001FAD6\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\U0001F900-\U0001F9FF\U0001FA70-\U0001FAFF]$"  # Unicode emoji
+)
+
+# Reward types to set mandatory fields
+BADGE_TYPES = ("badge",)
+STACKABLE_TYPES = ("preset", "dynamic",)
+PUBLISHABLE_REWARD_TYPES = ("preset", "dynamic",)
+
+EXCLUDED_LOG_FIELDS = {"created_by", "created_at", "modified_by", "modified_at", "preset_by", "preset_at"}

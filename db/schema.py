@@ -1,5 +1,12 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey
+import enum
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))		
+
+from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, Text, UniqueConstraint  
 from sqlalchemy.orm import declarative_base, relationship
+
 
 Base = declarative_base()
 
@@ -11,70 +18,86 @@ class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True)
-    discord_id = Column(String, unique=True)
-    points = Column(Integer, default=0)
-    total_earned = Column(Integer, default=0)
-    total_spent = Column(Integer, default=0)
+    user_discord_id = Column(String, unique=True, nullable=False)		# discord unique user id
+    points = Column(Integer, default=0, nullable=False)
+    total_earned = Column(Integer, default=0, nullable=False)
+    total_spent = Column(Integer, default=0, nullable=False)
 
-    username = Column(String)
-    display_name = Column(String)
-    nickname = Column(String)
+    username = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)
+    nickname = Column(String, nullable=True)
 
-    created_at = Column(String)
+    created_at = Column(String, nullable=False)
     modified_at = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<User {self.discord_id} | points: {self.points}>"
+        return f"<User {self.user_discord_id} name={self.username}>"
 
+
+# Event statuses
+class EventStatus(enum.Enum):
+    draft = "draft"        # Not visible, not active
+    visible = "visible"    # Public, can join, limited actions
+    active = "active"      # Fully running
+    archived = "archived"  # Finished
 
 # Events hosted in the community.
-# Includes event type, dates, description, and visibility.
+# Includes event type, dates, description, and status.
 class Event(Base):
     __tablename__ = 'events'
 
     id = Column(Integer, primary_key=True)
-    event_id = Column(String, unique=True, nullable=False)
-    name = Column(String, nullable=False)
-    type = Column(String, nullable=False)
-    description = Column(Text, nullable=False)
+    event_key = Column(String, unique=True, nullable=False)		# user friendly code e.g. 'drkwk2508' 
+    event_name = Column(String, nullable=False)
+    event_type = Column(String, nullable=False)
+    event_description = Column(Text, nullable=False)
     start_date = Column(String, nullable=False)
     end_date = Column(String, nullable=True)
-    coordinator_id = Column(String, nullable=True)
+    coordinator_discord_id = Column(String, nullable=True)		# discord unique user id
     priority = Column(Integer, nullable=False, default=0)
-    shop_section_id = Column(String, nullable=True)
-    tags = Column(String, nullable=True)  # Comma-separated for future search
-    embed_channel_id = Column(String, nullable=True)
-    embed_message_id = Column(String, nullable=True)
-    role_id = Column(String, nullable=True)
-    
-    created_by = Column(String, nullable=False)
+    tags = Column(String, nullable=True)		# comma-separated for future search
+    embed_channel_discord_id = Column(String, nullable=True)		# discord unique channel id
+    embed_message_discord_id = Column(String, nullable=True)		# discord unique message id
+    role_discord_id = Column(String, nullable=True)		# discord unique role id
+
+    event_status = Column(Enum(EventStatus), default=EventStatus.draft, nullable=False)
+
+    created_by = Column(String, nullable=False)		# discord unique user id
     created_at = Column(String, nullable=False)
-    modified_by = Column(String, nullable=True)
+    modified_by = Column(String, nullable=True)		# discord unique user id
     modified_at = Column(String, nullable=True)
 
-    active = Column(Boolean, default=False)
-    visible = Column(Boolean, default=False)
-
     def __repr__(self):
-        return f"<Event {self.event_id} ({self.name})>"
+        return f"<Event {self.event_key} name={self.event_name}>"
 
-        
+
 # Logs changes to events by moderators.
 class EventLog(Base):
 
     __tablename__ = 'event_logs'
 
     id = Column(Integer, primary_key=True)
-    event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)
-    action = Column(String, nullable=False)  # e.g. 'create', 'edit', 'delete'
-    performed_by = Column(String, nullable=False)  
-    timestamp = Column(String, nullable=False) 
-    description = Column(Text, nullable=True)  # Optional note or metadata
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)		# id in events table
+    log_action = Column(String, nullable=False)		# 'create', 'edit', 'delete'
+    performed_by = Column(String, nullable=False)		# discord unique user id
+    performed_at = Column(String, nullable=False)
+    log_description = Column(Text, nullable=True)		# optional reason/details
 
     event = relationship("Event", backref="change_logs")
 
     def __repr__(self):
-        return f"<EventLog event_id={self.event_id} action={self.action} performed_by={self.performed_by}>"
+        if self.event and self.event.event_key:
+            event_ref = f"event={self.event.event_key}"
+        elif self.event_id is not None:
+            event_ref = f"event_id={self.event_id}"
+        else: 
+            event_ref = f"id={self.id}"
+
+        return (
+            f"<EventLog {self.log_action} "
+            f"{event_ref} "
+            f"by={self.performed_by} at={self.performed_at}>"
+        )
 
 
 # Rewards owned by users: titles, badges, or items (stackable or not).
@@ -82,21 +105,24 @@ class EventLog(Base):
 class Inventory(Base):
     __tablename__ = 'inventory_rewards'
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
-    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)
-    quantity = Column(Integer, default=1)
+    id = Column(Integer, primary_key=True, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)		# id in users table
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)		# id in rewards table
+    quantity = Column(Integer, default=1, nullable=False)
 
-    acquired_at = Column(String, nullable=True)
-    source_event_id = Column(Integer, ForeignKey('events.id', ondelete="SET NULL"), nullable=True)
-    equipped = Column(Boolean, default=False)
+    is_equipped = Column(Boolean, default=False, nullable=False)
 
-    user = relationship("User", backref="inventory")
-    reward = relationship("Reward", backref="owned_by")										
-    source_event = relationship("Event", backref="reward_events")
+    user = relationship("User", backref="inventory_items")
+    reward = relationship("Reward", backref="owned_by")
 
+    __table_args__ = (UniqueConstraint('user_id', 'reward_id', name='uix_user_reward'),)
+    
     def __repr__(self):
-        return f"<Inventory user_id={self.user_id} reward_id={self.reward_id} quantity={self.quantity}>"
+        return (
+            f"<Inventory user={self.user.user_discord_id if self.user else self.user_id} "
+            f"reward={self.reward.reward_key if self.reward else self.reward_id} "
+            f"quantity={self.quantity}>"
+        )
 
 
 # User-specific data for a given event.
@@ -104,12 +130,12 @@ class Inventory(Base):
 class UserEventData(Base):
     __tablename__ = 'user_event_data'
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
-    event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=False)
+    id = Column(Integer, primary_key=True, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)		# id in users table
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=False)		# id in events table
 
-    points_earned = Column(Integer, default=0)
-    joined_at = Column(String)
+    points_earned = Column(Integer, default=0, nullable=False)
+    joined_at = Column(String, nullable=False)
 
     ao3_handle = Column(String, nullable=True)
     tumblr_handle = Column(String, nullable=True)
@@ -117,17 +143,22 @@ class UserEventData(Base):
 
     last_active_at = Column(String, nullable=True)
     custom_notes = Column(Text, nullable=True)
-    status = Column(String, default="active")
+    status = Column(String, default="active", nullable=False)
 
     user = relationship("User", backref="event_data")
-    event = relationship("Event", backref="participants")
+    event = relationship("Event", backref="event_participants")
 
-    created_by = Column(String)    
-    modified_by = Column(String, nullable=True)
+    created_by = Column(String, nullable=False)		# discord unique user id
+    modified_by = Column(String, nullable=True)		# discord unique user id
     modified_at = Column(String, nullable=True)
+    
+    __table_args__ = (UniqueConstraint('user_id', 'event_id', name='uix_user_event'),)
 
     def __repr__(self):
-        return f"<UserEventData user_id={self.user_id} event_id={self.event_id} status='{self.status}'>"
+        return (
+            f"<UserEventData user={self.user.user_discord_id if self.user else self.user_id} "
+            f"event={self.event.event_key if self.event else self.event_id}>"
+        )
 
 
 # Defines possible actions users or moderators can perform.
@@ -136,44 +167,83 @@ class Action(Base):
     __tablename__ = 'actions'
 
     id = Column(Integer, primary_key=True)
-    action_key = Column(String, unique=True, nullable=False)  # e.g. "submit_fic", "comment_fics"
-    active = Column(Boolean, default=True, nullable=False)
-    description = Column(Text, nullable=False)
+    action_key = Column(String, unique=True, nullable=False)		# user friendly code e.g. 'submit_fic', 'comment', 'join'
+    is_active = Column(Boolean, default=True, nullable=False)
+    action_description = Column(Text, nullable=False)
 
-    input_fields_json = Column(Text, nullable=True)  # Optional: expected fields (["url"], etc.)
+    input_fields_json = Column(Text, nullable=True)		# expected fields in json (["url"], etc.)
 
     created_at = Column(String, nullable=False)
     deactivated_at = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<Action {self.action_key}>"
+        return f"<Action {self.action_key} description={self.action_description}>"
 
 
 # Configures a specific action's rewards and permissions within a specific event.
 # Includes user guidance text to explain how to report the action in this event.
-class ActionEventConfig(Base):
-    __tablename__ = 'action_event_configs'
+class ActionEvent(Base):
+    __tablename__ = 'action_events'
 
     id = Column(Integer, primary_key=True)
-    action_id = Column(Integer, ForeignKey('actions.id', ondelete="CASCADE"), nullable=False)
-    event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)
+    action_event_key = Column(String, nullable=False, unique=True)		# user friendly code e.g. 'drkwk2508_submit_fic_default'
+    action_id = Column(Integer, ForeignKey('actions.id', ondelete="CASCADE"), nullable=False)		# id in actions table
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)		# id in events table
+    variant = Column(String, nullable=False)		# code for action_event_key unicity e.g. 'default', 'current'
 
     points_granted = Column(Integer, default=0, nullable=False)
-    reward_event_id = Column(Integer, ForeignKey('reward_events.id', ondelete="SET NULL"), nullable=True)
-    self_reportable = Column(Boolean, nullable=False, default=True)
+    reward_event_id = Column(Integer, ForeignKey('reward_events.id', ondelete="SET NULL"), nullable=True)		# id in rewards table
+    is_allowed_during_visible = Column(Boolean, nullable=False, default=False)
+    is_self_reportable = Column(Boolean, nullable=False, default=True)
+    input_help_text = Column(Text, nullable=True)
 
-    input_help_text = Column(Text, nullable=True)  # Per-event user guidance for input
+    created_by = Column(String, nullable=False)		# discord unique user id 
+    created_at = Column(String, nullable=False)
+
+    modified_by = Column(String, nullable=True)		# discord unique user id 
+    modified_at = Column(String, nullable=True)
 
     action = relationship("Action", backref="event_configs")
     event = relationship("Event", backref="action_configs")
-    reward_event = relationship("RewardEvent", backref="action_grants")
+    reward_event = relationship("RewardEvent", backref="granted_by_actions")
 
-    created_by = Column(String)   
-    created_at = Column(String) 
+    __table_args__ = (
+    UniqueConstraint('event_id', 'action_id', 'variant', name='uix_event_action_variant'),
+    )
 
     def __repr__(self):
-        return (f"<ActionEventConfig action_id={self.action_id} event_id={self.event_id} "
-                f"points={self.points_granted} reward_event_id={self.reward_event_id}>")
+        return (
+            f"<ActionEvent action_event={self.action_event_key} "
+            f"points={self.points_granted} and/or "
+            f"reward={self.reward_event.reward_event_key if self.reward_event else self.reward_event_id}>"
+        )
+
+
+class ActionEventLog(Base):
+    __tablename__ = "action_event_logs"
+
+    id = Column(Integer, primary_key=True)
+    action_event_id = Column(Integer, ForeignKey('action_events.id', ondelete="SET NULL"), nullable=True)		# id in action_events table
+    log_action = Column(String, nullable=False)		# 'create', 'edit', 'delete'
+    performed_by = Column(String, nullable=False)		# discord unique user id
+    performed_at = Column(String, nullable=False)
+    log_description = Column(Text, nullable=True)		# optional reason/details
+
+    action_event = relationship("ActionEvent", backref="change_logs")
+
+    def __repr__(self):
+        if self.action_event and self.action_event.action_event_key:
+            action_event_ref = f"action_event={self.action_event.action_event_key}"
+        elif self.action_event_id is not None:
+            action_event_ref = f"action_event_id={self.action_event_id}"
+        else: 
+            action_event_ref = f"id={self.id}"
+
+        return (
+            f"<ActionEventLog {self.log_action} "
+            f"{action_event_ref} "
+            f"by={self.performed_by} at={self.performed_at}>"
+        )
 
 
 # Logs individual actions performed by users.
@@ -182,12 +252,12 @@ class UserAction(Base):
     __tablename__ = 'user_actions'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
-    action_id = Column(Integer, ForeignKey('actions.id', ondelete="RESTRICT"), nullable=False)
-    event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)		# id in users table
+    action_id = Column(Integer, ForeignKey('actions.id', ondelete="RESTRICT"), nullable=False)		# id in actions table
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=True)		# id in events table
 
-    created_by = Column(String)    # for when actions are logged by a mod for out of server participants
-    timestamp = Column(String)  
+    created_by= Column(String, nullable=False)		# for when actions are logged by a mod, discord unique user id 
+    created_at = Column(String, nullable=False)
 
     url = Column(String, nullable=True)
     numeric_value = Column(Integer, nullable=True)
@@ -195,48 +265,74 @@ class UserAction(Base):
     boolean_value = Column(Boolean, nullable=True)
     date_value = Column(String, nullable=True)
 
-    metadata_json = Column(Text, nullable=True)  # Optional extras
+    metadata_json = Column(Text, nullable=True)		# optional extras (tbd)
 
     user = relationship("User", backref="actions")
-    action = relationship("Action", backref="performed_by")
+    action = relationship("Action", backref="performed_actions")
     event = relationship("Event", backref="action_logs")
 
     def __repr__(self):
-        return f"<UserAction user_id={self.user_id} action_id={self.action_id} timestamp={self.timestamp}>"
+        return (
+            f"<UserAction user={self.user.user_discord_id if self.user else self.user_id} "
+            f"action={self.action.action_key if self.action else self.action_id} "
+            f"event={self.event.event_key if self.event else self.event_id} "
+            f"at={self.created_at}>"
+        )
 
 
-# Rewards available: titles, badges, or items.
+# Rewards available: titles, badges, preset or dynamic.
 # Shows stackability of items and the number of rewards distributed to users.
 class Reward(Base):
     __tablename__ = 'rewards'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(String, unique=True, nullable=False)  # Internal unique code
-    reward_type = Column(String, nullable=False)  # 'title', 'badge', 'preset'
+    reward_key = Column(String, unique=True, nullable=False)		# user friendly code e.g. 'd_hug', 'p_drkwk01'
+    reward_type = Column(String, nullable=False)		# 'title', 'badge', 'preset', 'dynamic'
     reward_name = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
+    reward_description = Column(Text, nullable=True)
+    is_released_on_active = Column(Boolean, default=False, nullable=False)
 
     emoji = Column(String, nullable=True)  # For type 'badge'
+    
+    # Preset usage field
+    use_channel_discord_id = Column(String, nullable=True)		# discord unique channel id
+    use_message_discord_id = Column(String, nullable=True)		# discord unique message id
+    use_header_message_discord_id = Column(String, nullable=True)		# discord unique message id
 
-    # Preset-specific
-    use_channel_id = Column(String, nullable=True)
-    use_message_id = Column(String, nullable=True)
-    use_header_message_id = Column(String, nullable=True)  # header message ID
-    stackable = Column(Boolean, default=False, nullable=False)
+    # Dynamic usage fields
+    use_template = Column(Text, nullable=True)		# '{user} hugs {target}'
+    use_allowed_params = Column(String, nullable=True)		# 'target' or 'target,amount'
+    use_media_mode = Column(String, nullable=True)		# 'single', 'random', 'embed', None
 
+    is_stackable = Column(Boolean, default=False, nullable=False)
     number_granted = Column(Integer, default=0, nullable=False)
 
-    created_by = Column(String, nullable=False)
+    created_by = Column(String, nullable=False)		# discord unique user id
     created_at = Column(String, nullable=False)
-    modified_by = Column(String, nullable=True)
+    modified_by = Column(String, nullable=True)		# discord unique user id
     modified_at = Column(String, nullable=True)
 
-    # Preset publication tracking
-    preset_set_by = Column(String, nullable=True)
-    preset_set_at = Column(String, nullable=True)
+    preset_by = Column(String, nullable=True)		# discord unique user id
+    preset_at = Column(String, nullable=True)
 
     def __repr__(self):
-        return f"<Reward {self.reward_id} ({self.reward_type})>"
+        return f"<Reward {self.reward_key} name={self.reward_name}>"
+
+
+# Rewards setup for multiple media (images, GIFs) rewards
+class RewardMedia(Base):
+    __tablename__ = 'reward_medias'
+
+    id = Column(Integer, primary_key=True)
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete='CASCADE'), nullable=False)		# id in rewards table
+    media_url = Column(String, nullable=False)
+    created_by = Column(String, nullable=False)		# discord unique user id
+    created_at = Column(String, nullable=False)
+
+    reward = relationship("Reward", backref="media_list")
+
+    def __repr__(self):
+        return f"<RewardMedia reward={self.reward.reward_key if self.reward else self.reward_id} media_url={self.media_url}>"
 
 
 # Logs changes to rewards by moderators.
@@ -244,16 +340,23 @@ class RewardLog(Base):
     __tablename__ = 'reward_logs'
 
     id = Column(Integer, primary_key=True)
-    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="SET NULL"), nullable=True)
-    action = Column(String, nullable=False)  # 'create', 'edit', 'delete'
-    performed_by = Column(String, nullable=False) 
-    timestamp = Column(String, nullable=False) 
-    description = Column(Text, nullable=True)  # Optional reason/details
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="SET NULL"), nullable=True)		# id in rewards table
+    log_action = Column(String, nullable=False)		# 'create', 'edit', 'delete'
+    performed_by = Column(String, nullable=False)		# discord unique user id
+    performed_at = Column(String, nullable=False)
+    log_description = Column(Text, nullable=True)		# optional reason/details
 
     reward = relationship("Reward", backref="change_logs")
 
     def __repr__(self):
-        return f"<RewardLog reward_id={self.reward_id} action={self.action} performed_by={self.performed_by}>"
+        if self.reward and self.reward.reward_key:
+            reward_ref = f"reward={self.reward.reward_key}"
+        elif self.reward_id is not None:
+            reward_ref = f"reward_id={self.reward_id}"
+        else: 
+            reward_ref = f"id={self.id}"
+
+        return (f"<RewardLog {self.log_action} {reward_ref}, by={self.performed_by} at={self.performed_at}>")
 
 
 # Links rewards to events.
@@ -262,12 +365,49 @@ class RewardEvent(Base):
     __tablename__ = 'reward_events'
 
     id = Column(Integer, primary_key=True)
-    event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)
-    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)
+    reward_event_key = Column(String, unique=True, nullable=False)		# user friendly code e.g. 'drkwk2508_d_hug_inshop' 
+    event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)		# id in events table
+    reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)		# id in rewards table
 
-    availability = Column(String, nullable=False, default="inshop")	# 'inshop' or 'onaction'
+    availability = Column(String, nullable=False, default="inshop")		# 'inshop', 'onaction'
+    price = Column(Integer, nullable=False, default=0)
 
-    price = Column(Integer, nullable=False, default=0)	# Used if availability == 'inshop'
+    created_by = Column(String, nullable=False)		# discord unique user id
+    created_at = Column(String, nullable=False)
+
+    modified_by = Column(String, nullable=True)		# discord unique user id
+    modified_at = Column(String, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('event_id', 'reward_id', 'availability', name='uix_event_reward_availability'),
+    )
 
     def __repr__(self):
-        return f"<RewardEvent(event_id={self.event_id}, reward_id={self.reward_id}, availability={self.availability})>"
+        return f"<RewardEvent reward_event_key={self.reward_event_key}>"
+
+
+class RewardEventLog(Base):
+    __tablename__ = "reward_event_logs"
+
+    id = Column(Integer, primary_key=True)
+    reward_event_id = Column(Integer, ForeignKey('reward_events.id', ondelete="SET NULL"), nullable=True)		# id in reward_events table
+    log_action = Column(String, nullable=False)		# 'create', 'edit', 'delete'
+    performed_by = Column(String, nullable=False)		# discord unique user id
+    performed_at = Column(String, nullable=False)
+    log_description = Column(Text, nullable=True)		# optional reason/details
+
+    reward_event = relationship("RewardEvent", backref="change_logs")
+
+    def __repr__(self):
+        if self.reward_event and self.reward_event.reward_event_key:
+            reward_event_ref = f"reward_event={self.reward_event.reward_event_key}"
+        elif self.reward_event_id is not None:
+            reward_event_ref = f"reward_event_id={self.reward_event_id}"
+        else: 
+            reward_event_ref = f"id={self.id}"
+
+        return (
+            f"<RewardEventLog {self.log_action} "
+            f"{reward_event_ref} "
+            f"by={self.performed_by} at={self.performed_at}>"
+        )

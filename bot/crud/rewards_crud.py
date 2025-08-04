@@ -1,23 +1,32 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from typing import Optional
 from bot.crud import general_crud
 from bot.utils import now_iso
-from db.schema import Reward, RewardLog, RewardEvent, Event
+from db.schema import Reward, RewardLog, RewardEvent
 
 
 # --- GET ---
-def get_reward(session: Session, reward_id: str) -> Reward:
-    """Retrieve a reward by its internal reward_id."""
-    return session.query(Reward).filter_by(reward_id=reward_id).first()
+def get_reward_by_key(
+    session: Session, 
+    reward_key: str
+) ->  Optional[Reward]:
+    """Retrieve a reward by its internal reward_key."""
+    
+    return session.query(Reward).filter_by(reward_key=reward_key).first()
 
 
 # --- CREATE ---
-def create_reward(session: Session, reward_data: dict, performed_by: str) -> Reward:
+def create_reward(
+    session: Session, 
+    reward_create_data: dict
+) -> Reward:
     """
-    Create a new reward.
-    reward_data should match Reward model fields except id.
+    Create a new reward and log the action.
     """
-    reward = Reward(**reward_data, created_at=now_iso())
+    
+    iso_now=now_iso()
+    reward = Reward(**reward_create_data, created_at=iso_now)    
     session.add(reward)
     session.flush()  # Needed to get reward.id for log
 
@@ -26,87 +35,120 @@ def create_reward(session: Session, reward_data: dict, performed_by: str) -> Rew
         log_model=RewardLog,
         fk_field="reward_id",
         fk_value=reward.id,
-        action="create",
-        performed_by=performed_by,
-        description=f"Reward created: {reward.reward_name} ({reward.reward_id})"
+        log_action="create",
+        performed_by=reward.created_by,
+        performed_at=iso_now,
+        log_description=f"Reward created: {reward.reward_name} ({reward.reward_key})"
     )
+    
     return reward
     
 
 # --- UPDATE ---
-def update_reward(session: Session, reward_id: str, updates: dict, performed_by: str) -> Reward:
+def update_reward(
+    session: Session, 
+    reward_key: str, 
+    reward_update_data: dict, 
+    reason: Optional[str] = None,
+    forced: bool = False
+) -> Optional[Reward]:
     """
-    Update a reward with the given updates dict.
+    Update a reward with the given updates dict and log the action.
     Returns updated Reward or None if not found.
     """
-    reward = get_reward(session, reward_id)
+
+    reward = get_reward_by_key(
+        session=session, 
+        reward_key=reward_key
+    )
     if not reward:
         return None
 
-    for key, value in updates.items():
+    iso_now=now_iso()
+    for key, value in reward_update_data.items():
         setattr(reward, key, value)
 
-    reward.modified_by = performed_by
-    reward.modified_at = now_iso()
-
+    reward.modified_at = iso_now
+    
+    log_description = f"Reward {reward.reward_name} ({reward.reward_key}) updated."
+    if reason:
+        log_description += f" Reason: {reason}"
+    log_description += f" Updated fields: {', '.join(reward_update_data.keys())}" 
+    
     general_crud.log_change(
         session=session,
         log_model=RewardLog,
         fk_field="reward_id",
         fk_value=reward.id,
-        action="edit",
-        performed_by=performed_by,
-        description=f"Updated fields: {', '.join(updates.keys())}",
-        forced=True
+        log_action="edit",
+        performed_by=reward.modified_by,
+        performed_at=iso_now,
+        log_description=log_description,
+        forced=forced
     )
 
     return reward
 
 
 # --- DELETE ---
-def delete_reward(session: Session, reward_id: str, performed_by: str) -> bool:
+def delete_reward(
+    session: Session, 
+    reward_key: str, 
+    performed_by: str,
+    reason: str,
+    forced: bool = False
+) -> bool:
     """Delete a reward and log the action."""
-    reward = get_reward(session, reward_id)
+    
+    reward = get_reward_by_key(
+        session=session, 
+        reward_key=reward_key
+    )
     if not reward:
         return False
-
+    
+    iso_now=now_iso()
+    
     general_crud.log_change(
         session=session,
         log_model=RewardLog,
         fk_field="reward_id",
         fk_value=reward.id,
-        action="delete",
+        log_action="delete",
         performed_by=performed_by,
-        description=f"Deleted reward: {reward.reward_name} ({reward.reward_id})",
-        forced=True
+        performed_at=iso_now,
+        log_description=f"Deleted reward: {reward.reward_name} ({reward.reward_key}). Reason: {reason}",
+        forced=forced
     )
 
     session.delete(reward)
+    
     return True
 
 
 # --- LIST ---
 def get_all_rewards(
-    session,
-    type: str = None,
-    mod_id: str = None,
-    name: str = None
-):
+    session: Session, 
+    reward_type: Optional[str] = None,
+    reward_name: Optional[str] = None,
+    mod_by_discord_id: Optional[str] = None
+) -> list[Reward]:
     """
     Retrieve rewards with optional filters:
-    - reward_type: 'title', 'badge', 'preset'
+    - reward_type: 'title', 'badge', 'preset', 'dynamic'
     - reward_name: partial match on reward name
-    - mod_id: Discord ID of moderator
+    - mod_discord_id: Discord id of moderator
     """
+    
     query = session.query(Reward)
 
-    if type:
-        query = query.filter(Reward.reward_type.ilike(type))
-    if name:
-        query = query.filter(Reward.reward_name.ilike(f"%{name}%"))
-    if mod_id:
+    if reward_type:
+        query = query.filter(Reward.reward_type.ilike(reward_type))
+    if reward_name:
+        query = query.filter(Reward.reward_name.ilike(f"%{reward_name}%"))
+    if mod_by_discord_id:
         query = query.filter(
-            or_(Reward.created_by == mod_id, Reward.modified_by == mod_id)
+            or_(Reward.created_by == mod_by_discord_id, Reward.modified_by == mod_by_discord_id)
         )
 
     return query.order_by(
@@ -117,62 +159,68 @@ def get_all_rewards(
 
 # --- LIST LOGS ---
 def get_reward_logs(
-    session,
-    action: str = None,
-    performed_by: str = None
-):
+    session: Session, 
+    log_action: Optional[str] = None,
+    performed_by: Optional[str] = None
+) -> list[RewardLog]:
     """
     Retrieve reward logs with optional filters:
-    - action: 'create', 'edit', 'delete'
-    - performed_by: Discord ID of moderator
+    - log_action: 'create', 'edit', 'delete'
+    - performed_by: Discord id of moderator
     """
+    
     query = (
         session.query(RewardLog)
         .join(Reward, Reward.id == RewardLog.reward_id, isouter=True)
     )
 
-    if action:
-        query = query.filter(RewardLog.action == action.lower())
+    if log_action:
+        query = query.filter(RewardLog.log_action == log_action.lower())
     if performed_by:
         query = query.filter(RewardLog.performed_by == performed_by)
 
-    return query.order_by(RewardLog.timestamp.desc()).all()
+    return query.order_by(RewardLog.performed_at.desc()).all()
 
 
 # --- PUBLISH ---
 def publish_preset(
     session: Session,
-    reward_id: str,
-    use_channel_id: str,
-    use_message_id: str,
-    use_header_message_id: str, 
-    set_by: str
-) -> Reward:
+    reward_key: str,
+    use_channel_discord_id: str,
+    use_message_discord_id: str,
+    use_header_message_discord_id: str, 
+    set_by_discord_id: str
+) -> Optional[Reward]:
     """
     Update a reward's approved preset details.
     Also logs the publish action.
     """
-    reward = get_reward(session, reward_id)
+    
+    reward = get_reward_by_key(
+        session=session, 
+        reward_key=reward_key
+    )
     if not reward:
         return None
-
-    reward.use_channel_id = str(use_channel_id)
-    reward.use_message_id = str(use_message_id)
-    reward.use_header_message_id = str(use_header_message_id)  # header
-    reward.preset_set_by = str(set_by)
-    reward.preset_set_at = now_iso()
-
-    reward.modified_by = set_by
-    reward.modified_at = reward.preset_set_at
+        
+    iso_now=now_iso()
+    reward.use_channel_discord_id = str(use_channel_discord_id)
+    reward.use_message_discord_id = str(use_message_discord_id)
+    reward.use_header_message_discord_id = str(use_header_message_discord_id)  # header
+    reward.preset_by = str(set_by_discord_id)
+    reward.preset_at = iso_now
+    reward.modified_by = set_by_discord_id
+    reward.modified_at = iso_now
 
     general_crud.log_change(
         session=session,
         log_model=RewardLog,
         fk_field="reward_id",
         fk_value=reward.id,
-        action="edit",
-        performed_by=set_by,
-        description=f"Published/updated preset for reward `{reward.reward_id}`.",
+        log_action="edit",
+        performed_by=set_by_discord_id,
+        performed_at=iso_now,
+        log_description=f"Published/updated preset for reward `{reward.reward_key}`.",
         forced=True
     )
 
@@ -180,28 +228,16 @@ def publish_preset(
     
 
 # --- VALIDATE ---
-def reward_is_linked_to_active_event(session, reward_code: str) -> bool:
-    """
-    Checks if the given reward (by public string reward_id) is linked
-    to at least one active event.
-
-    reward_code: str -> e.g. "p_drkweek"
-    Returns: bool
-    """
-
-    # First, find the Reward object from its public string ID
-    reward = session.query(Reward).filter(Reward.reward_id == reward_code).first()
-    if not reward:
-        return False  # No such reward exists
-
-    # Then check if this reward's integer PK is linked to any active events
-    return (
-        session.query(RewardEvent)
-        .join(Event, Event.id == RewardEvent.event_id)
-        .filter(
-            RewardEvent.reward_id == reward.id,  # integer PK now
-            Event.active.is_(True)
-        )
-        .count()
-        > 0
+def reward_is_linked_to_active_event(
+    session: Session,
+    reward_key: str
+) -> bool:
+    """Returns True if a reward is linked to any active event."""
+    
+    return general_crud.is_linked_to_active_event(
+        session=session,
+        link_model=RewardEvent,
+        link_field_name="reward_id",
+        key_lookup_func=get_reward_by_key,
+        public_key=reward_key
     )
