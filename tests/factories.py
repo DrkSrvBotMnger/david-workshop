@@ -1,6 +1,16 @@
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 from db.schema import Action, ActionEvent, Event, EventStatus, Reward, RewardEvent
+
+
+@pytest.fixture
+def guild_with_member():
+    """Fixture to create a mock guild and member for testing."""
+    guild = MagicMock()
+    member = MagicMock()
+    guild.fetch_member = AsyncMock(return_value=member)
+    return guild, member
 
 
 @pytest.fixture

@@ -1,75 +1,47 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from bot.utils import is_admin_or_mod
-
-@pytest.fixture
-def mock_interaction():
-    mock = MagicMock()
-    mock.user.id = 1234
-    mock.user.mention = "<@1234>"
-    mock.response.defer = AsyncMock()
-    mock.followup.send = AsyncMock()
-    mock.guild.get_channel = MagicMock(return_value=AsyncMock(send=AsyncMock()))
-    return mock
+from unittest.mock import MagicMock, patch
+from bot.utils import is_admin_or_mod, MOD_ROLE_IDS
 
 
 @pytest.mark.utils
-@pytest.mark.basic
+@pytest.mark.access
 @pytest.mark.asyncio
-async def test_is_admin_or_mod_false_for_regular_user():
-    mock_member = MagicMock()
-    mock_member.guild_permissions.administrator = False
-    mock_member.roles = []  # No roles
+async def test_is_admin_or_mod_false_for_regular_user(guild_with_member):
+    """User with no admin rights or mod roles should return False."""
+    guild, member = guild_with_member
+    member.guild_permissions.administrator = False
+    member.roles = []
 
-    mock_guild = MagicMock()
-    mock_guild.fetch_member = AsyncMock(return_value=mock_member)
-
-    mock_interaction = MagicMock()
-    mock_interaction.user.id = 9999
-    mock_interaction.guild = mock_guild
-
-    result = await is_admin_or_mod(mock_interaction)
-    assert result is False
+    interaction = MagicMock(guild=guild, user=MagicMock(id=9999))
+    assert await is_admin_or_mod(interaction) is False
 
 
 @pytest.mark.utils
-@pytest.mark.basic
+@pytest.mark.access
 @pytest.mark.asyncio
-async def test_is_admin_or_mod_true_if_admin():
-    mock_member = MagicMock()
-    mock_member.guild_permissions.administrator = True
-    mock_member.roles = []
+async def test_is_admin_or_mod_true_if_admin(guild_with_member):
+    """User with admin permissions should return True."""
+    guild, member = guild_with_member
+    member.guild_permissions.administrator = True
+    member.roles = []
 
-    mock_guild = MagicMock()
-    mock_guild.fetch_member = AsyncMock(return_value=mock_member)
-
-    mock_interaction = MagicMock()
-    mock_interaction.user.id = 1234
-    mock_interaction.guild = mock_guild
-
-    result = await is_admin_or_mod(mock_interaction)
-    assert result is True
+    interaction = MagicMock(guild=guild, user=MagicMock(id=1234))
+    assert await is_admin_or_mod(interaction) is True
 
 
 @pytest.mark.utils
-@pytest.mark.basic
+@pytest.mark.access
 @pytest.mark.asyncio
-async def test_is_admin_or_mod_true_if_mod_role_matches():
-    from bot import utils
-    mock_member = MagicMock()
-    mock_member.guild_permissions.administrator = False
+async def test_is_admin_or_mod_true_if_mod_role_matches(guild_with_member):
+    """User with one of the MOD_ROLE_IDS roles should return True."""
+    guild, member = guild_with_member
+    member.guild_permissions.administrator = False
 
     mock_mod_role = MagicMock()
-    mock_mod_role.id = utils.MOD_ROLE_IDS[0] if utils.MOD_ROLE_IDS else 123456789
-    mock_member.roles = [mock_mod_role]
+    mock_mod_role.id = MOD_ROLE_IDS[0] if MOD_ROLE_IDS else 123456789
+    member.roles = [mock_mod_role]
 
-    mock_guild = MagicMock()
-    mock_guild.fetch_member = AsyncMock(return_value=mock_member)
-
-    mock_interaction = MagicMock()
-    mock_interaction.user.id = 1234
-    mock_interaction.guild = mock_guild
+    interaction = MagicMock(guild=guild, user=MagicMock(id=1234))
 
     with patch("bot.utils.MOD_ROLE_IDS", [mock_mod_role.id]):
-        result = await is_admin_or_mod(mock_interaction)
-        assert result is True
+        assert await is_admin_or_mod(interaction) is True

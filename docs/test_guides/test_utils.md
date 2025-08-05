@@ -1,57 +1,83 @@
-# 🧪 Test Guide – Shared and Utilities functions Tests
+# 🧪 Test Guide – Utilities & Shared Functions
 
-This guide outlines test coverage for utility functions and UI helpers found in `bot/utils.py`.
+This guide outlines test coverage for utility functions, access rights helpers, and UI interaction helpers found in `bot/utils.py`.
 
 ---
 
-## 📁 Shared utilities - File: `tests/utils/test_utils.py`
+## 📁 **Core Utilities** – File: `tests/utils/test_utils.py`
 
-### 🔍 Covered Functions
-
-| Function                         | Tested ✓ | Notes                                          |
-|----------------------------------|----------|------------------------------------------------|
-| `safe_parse_date()`              | ✅       | Accepts multiple formats, rejects invalid ones |
-| `format_discord_timestamp()`     | ✅       | Converts ISO to Discord timestamp or fallback  |
-| `format_log_entry()`             | ✅       | Generates audit log display strings            |
-| `EmbedPaginator.update_footer()` | ✅       | Verifies correct footer per page               |
+| Function                     | Covered ✓ | Notes                                                |
+| ---------------------------- | --------- | ---------------------------------------------------- |
+| `safe_parse_date()`          | ✅         | Multiple formats + invalid cases (parametrized)      |
+| `format_discord_timestamp()` | ✅         | Valid + invalid cases (parametrized)                 |
+| `format_log_entry()`         | ✅         | Correct formatting, includes action, user, timestamp |
 
 ### 🔹 `safe_parse_date(date_str)`
-- Invalid strings return `None` 🔹 basic
-- Accepts format `2025-01-01`, `2025/01/01`, `01/01/2025` 
+
+* Accepts formats:
+
+  * `2025-01-01`
+  * `2025/01/01`
+  * `01/01/2025`
+* Invalid formats return `None`
 
 ### 🔹 `format_discord_timestamp(iso_str)`
-- Valid ISO input → Discord timestamp 🔹 basic
-- Invalid input → returned unchanged
 
-### 🔹 `format_log_entry(action, user, timestamp, ...)` 🔹 basic
-- Output includes action, user, timestamp
-- Output is formated
-- Supports optional `label` and `description`
+* Valid ISO → `<t:unix:F>` format
+* Invalid → returned unchanged
 
-### 🔹 `EmbedPaginator.update_footer()`
-- Asserts all embeds include correct page numbers
+### 🔹 `format_log_entry(...)`
+
+* Includes action, user mention, timestamp
+* Supports optional `label` and `description`
 
 ---
 
-## 📁 Authorization - File: `tests/utils/test_role_check.py`
+## 📁 **Access Rights** – File: `tests/utils/test_role_check.py`
 
-#### 🔹 Covered Tests 🔹 basic
+| Function               | Covered ✓ | Notes                                   |
+| ---------------------- | --------- | --------------------------------------- |
+| `is_admin_or_mod()`    | ✅         | Admin, mod-role, and regular-user cases |
+| `admin_or_mod_check()` | ⚪ Planned | Check object creation only              |
 
-* [x] `is_admin_or_mod()` returns `False` for non-privileged user (logic test only)
-* [x] Positive logic test (admin = True)
-* [x] Positive logic test (mod role = True)
+### 🔹 `is_admin_or_mod(interaction)`
 
-#### ⏳ Potential Additions
+* Returns `False` for no admin/mod rights
+* Returns `True` for:
 
-* [ ] Actual decorator behavior via registered command (if integration testing possible)
-
----
-
-## 🔧 Next Steps
-
-- Consider mocking `Interaction` to test `paginate_embeds()` routing
-- Test view states (e.g. button disable logic) if bugs appear
+  * Guild admin
+  * Member with `MOD_ROLE_IDS` role
 
 ---
 
-_Last updated: July 27, 2025_
+## 📁 **UI & Interaction Helpers** – File: `tests/utils/test_utils_extended.py`
+
+| Function                      | Covered ✓ | Notes                                             |
+| ----------------------------- | --------- | ------------------------------------------------- |
+| `now_iso()`                   | ✅         | ISO 8601 string                                   |
+| `now_unix()`                  | ✅         | Unix timestamp integer                            |
+| `parse_message_link()`        | ✅         | Valid + invalid formats                           |
+| `admin_or_mod_check()`        | ✅         | Returns callable check wrapper                    |
+| `ConfirmActionView`           | ✅         | Confirm, cancel, and timeout handling             |
+| `confirm_action()`            | ✅         | Returns `True`/`False` based on confirm state     |
+| `EmbedPaginator` navigation   | ✅         | First, prev, next, last page changes              |
+| `paginate_embeds()`           | ✅         | No embeds, single embed, multi-embed              |
+| `post_announcement_message()` | ✅         | Valid send, role mention, invalid/exception cases |
+
+---
+
+## 📌 **Potential Additions**
+
+* Integration-style check for `admin_or_mod_check()` on a dummy command
+* UI flow integration for `ConfirmActionView` in a real Discord context
+* Parametrized paginator navigation tests to cover arbitrary start/end states
+
+---
+
+If you’re good with this, I can move on to **reward commands tests** next, following the same thorough approach we used for CRUD and utils.
+
+Do you want me to proceed with that now?
+
+---
+
+_Last updated: August 4, 2025_
