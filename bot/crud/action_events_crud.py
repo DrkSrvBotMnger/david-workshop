@@ -48,9 +48,10 @@ def create_action_event(
         log_model=ActionEventLog,
         fk_field="id",
         fk_value=ae.id,
-        action="create",
+        log_action="create",
         performed_by=created_by,
-        description=f"Linked action {action_id} to event {event_id}."
+        performed_at=created_by,
+        log_description=f"Linked action {action_id} to event {event_id}."
     )
     
     return ae
@@ -62,7 +63,7 @@ def update_action_event(
     action_event_id, 
     **kwargs
 ):
-    ae = get_action_event(session, action_event_id)
+    ae = get_action_event_by_key(session, action_event_id)
     if not ae:
         return None
     for key, value in kwargs.items():
@@ -76,7 +77,7 @@ def delete_action_event(
     session, 
     action_event_id
 ):
-    ae = get_action_event(session, action_event_id)
+    ae = get_action_event_by_key(session, action_event_id)
     if not ae:
         return False
     session.delete(ae)

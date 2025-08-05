@@ -332,8 +332,7 @@ class Reward(Base):
     owned_by = relationship("Inventory", back_populates="reward", passive_deletes=True)
     media_list = relationship("RewardMedia", back_populates="reward", passive_deletes=True)
     change_logs = relationship("RewardLog", back_populates="reward")
-    event_links = relationship("RewardEvent", back_populates="reward", passive_deletes=True)
-    
+    event_links = relationship("RewardEvent", back_populates="reward", passive_deletes=True)    
 
     def __repr__(self):
         return f"<Reward {self.reward_key} name={self.reward_name}>"

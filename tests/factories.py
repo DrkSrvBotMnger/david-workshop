@@ -23,6 +23,23 @@ def base_event(test_session):
 
 
 @pytest.fixture
+def active_event(test_session):
+    event = Event(
+        event_key="test_event_active",
+        event_name="Test Event",
+        event_type="test",
+        event_description="desc",
+        start_date="2025-01-01",
+        event_status=EventStatus.active,
+        created_by="tester",
+        created_at=datetime.now(timezone.utc).isoformat()
+    )
+    test_session.add(event)
+    test_session.flush()
+    return event
+
+
+@pytest.fixture
 def base_action(test_session):
     """Create a base Action for FK testing."""
     action = Action(

@@ -189,7 +189,8 @@ def publish_preset(
     use_channel_discord_id: str,
     use_message_discord_id: str,
     use_header_message_discord_id: str, 
-    set_by_discord_id: str
+    set_by_discord_id: str,
+    forced: bool = False
 ) -> Optional[Reward]:
     """
     Update a reward's approved preset details.

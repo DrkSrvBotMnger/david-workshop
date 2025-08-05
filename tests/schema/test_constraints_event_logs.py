@@ -45,6 +45,7 @@ def test_el_accepts_null_optional_fields(test_session):
     test_session.add(el)
     test_session.commit()
 
+    assert el.event_id is None
     assert el.log_description is None
 
 

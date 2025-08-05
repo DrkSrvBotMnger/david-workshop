@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 from bot.utils import now_iso
-from db.schema import Action
+from db.schema import Action, ActionEvent
+from bot.crud import general_crud
 
 
 # --- GET ---
@@ -75,3 +76,19 @@ def get_all_actions(
         query = query.order_by(Action.created_at.desc())
 
     return query.all()
+
+
+# --- VALIDATE ---
+def action_is_linked_to_active_event(
+    session: Session,
+    action_key: str
+) -> bool:
+    """Returns True if a reward is linked to any active event."""
+
+    return general_crud.is_linked_to_active_event(
+        session=session,
+        link_model=ActionEvent,
+        link_field_name="action_id",
+        key_lookup_func=get_action_by_key,
+        public_key=action_key
+    )
