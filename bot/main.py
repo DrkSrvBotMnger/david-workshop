@@ -11,7 +11,7 @@ class MyBot(commands.Bot):
             "bot.commands.admin.events_admin",
             "bot.commands.admin.actions_admin",
             "bot.commands.admin.rewards_admin",
-            #"bot.commands.admin.event_links_admin",
+            "bot.commands.admin.event_links_admin",
         ]
         for cog in admin_cogs:
             try:

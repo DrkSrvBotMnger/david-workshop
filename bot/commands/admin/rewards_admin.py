@@ -184,7 +184,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
 
             # Enforce stackable rule
             if reward.reward_type.lower() not in STACKABLE_TYPES:
-                stackable = False
+                stackable = None
                 
             reward_update_data = {}
             if name:
@@ -237,7 +237,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
             )
             
             if not reward:
-                await interaction.followup.send(f"❌ Reward `{shortcode}` not found.")
+                await interaction.edit_original_response(content=f"❌ Reward `{shortcode}` not found.",view=None)
                 return
 
         confirmed = await confirm_action(
@@ -254,16 +254,16 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 reward_key=shortcode
             ):
                 if not force:
-                    await interaction.followup.send(
-                        "❌ Cannot delete a reward linked to an active event without `--force`."
-                    )
+                    await interaction.edit_original_response(content=
+                        "❌ Cannot delete a reward linked to an active event without `--force`.", view=None)
                     return
-                confirmed = await confirm_action(
-                    interaction=interaction,
-                    item_name=f"reward `{shortcode}` linked to an ACTIVE event",
-                    reason="⚠️ **FORCED DELETE** — this will impact participants!"
-                )
-                
+                else:    
+                    confirmed = await confirm_action(
+                        interaction=interaction,
+                        item_name=f"reward `{shortcode}` linked to an ACTIVE event",
+                        reason="⚠️ **FORCED DELETE** — this will impact participants!"
+                    )
+                    
                 if not confirmed:
                     return
 
@@ -581,7 +581,8 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 use_channel_discord_id=REWARD_PRESET_CHANNEL_ID,
                 use_message_discord_id=new_clean.id,           # clean preset
                 use_header_message_discord_id=new_header.id,   # header
-                set_by_discord_id=str(interaction.user.id)
+                set_by_discord_id=str(interaction.user.id),
+                forced=force
             )
 
         # 8️⃣ Confirm to mod

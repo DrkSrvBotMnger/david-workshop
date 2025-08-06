@@ -45,7 +45,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         priority: int = 0,
         tags: Optional[str] = None,
         message_link: Optional[str] = None,
-        role_id: Optional[str] = None,
+        role_id: Optional[str] = None
     ):
         """Creates an event. Event key is auto-generated from shortcode + start month."""
 
@@ -290,11 +290,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 event_key=shortcode
             )
             if not event:
-                await interaction.edit_original_response(content=f"❌ Event `{shortcode}` not found.")
+                await interaction.edit_original_response(content=f"❌ Event `{shortcode}` not found.", view=None)
                 return
 
             if event.event_status in (EventStatus.visible, EventStatus.active):
-                await interaction.edit_original_response(content="⚠️ Cannot delete an event that is active or visible. Put the event in draft first.")
+                await interaction.edit_original_response(content="⚠️ Cannot delete an event that is active or visible. Put the event in draft first.", view=None)
                 return
             
             # Extract now while session is open
@@ -402,7 +402,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 session=session, 
                 event_key=shortcode)
             if not event:
-                await interaction.followup.send(f"❌ Event `{shortcode}` not found.", ephemeral=True)
+                await interaction.followup.send(f"❌ Event `{shortcode}` not found.")
                 return
 
             end_date = event.end_date or "*Ongoing*"
@@ -512,7 +512,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         ]
     )
     @app_commands.command(name="setstatus", description="Change the lifecycle status of an event.")
-    async def set_event_status_cmd(
+    async def set_event_status(
         self,
         interaction: discord.Interaction,
         shortcode: str,
@@ -529,7 +529,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 event_key=shortcode
             )
             if not event:                
-                await interaction.followup.send(f"❌ Event `{shortcode}` not found.", ephemeral=True)
+                await interaction.followup.send(f"❌ Event `{shortcode}` not found.")
                 return            
 
             old_status = event.event_status
@@ -584,7 +584,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                     role_discord_id=role_discord_id
                 )
 
-        await interaction.followup.send(f"✅ Event `{safe_event_name}` status changed to **{new_status.value}**.")
+        await interaction.followup.send(f"✅ Event `{safe_event_name} ({shortcode})` status changed to **{new_status.value}**.")
 
 
 # === Setup Function ===

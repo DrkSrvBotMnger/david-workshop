@@ -3,7 +3,7 @@ import json
 from discord import app_commands
 from discord.ext import commands
 from typing import Optional
-from bot.crud.actions_crud import create_action as crud_create_action, get_action_by_key, get_all_actions
+from bot.crud import actions_crud
 from bot.crud.users_crud import action_is_used
 from bot.config import ALLOWED_ACTION_INPUT_FIELDS, ACTIONS_PER_PAGE
 from bot.utils import admin_or_mod_check, paginate_embeds, now_iso
@@ -20,21 +20,21 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     @admin_or_mod_check()
     @app_commands.command(name="create", description="Create a new global action type.")
     @app_commands.describe(
-        action_key="Short unique key for the action (lowercase, underscores only, e.g. submit_fic)",
+        shortcode="Shortcode for the action (lowercase, underscores only, e.g. submit_fic)",
         description="Description of what this action is for",
         input_fields=f"Optional: comma-separated list of allowed fields ({', '.join(ALLOWED_ACTION_INPUT_FIELDS)})"
     )
     async def create_action(
         self,
         interaction: discord.Interaction,
-        action_key: str,
+        shortcode: str,
         description: str,
-        input_fields: str = ""
+        input_fields: Optional[str] = None
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         # --- Validate action key format ---
-        if not action_key.isidentifier() or not action_key.islower():
+        if not shortcode.isidentifier() or not shortcode.islower():
             await interaction.followup.send(
                 "❌ Action key must be lowercase letters, numbers, and underscores only (e.g. `submit_fic`)."
             )
@@ -42,34 +42,41 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
 
         # --- Parse and validate input fields ---
         input_fields_json = None
-        if input_fields.strip():
-            parsed = [f.strip() for f in input_fields.split(",") if f.strip()]
-            for field in parsed:
-                if field not in ALLOWED_ACTION_INPUT_FIELDS:
-                    await interaction.followup.send(
-                        f"❌ Invalid input field `{field}`. Allowed values: {', '.join(ALLOWED_ACTION_INPUT_FIELDS)}"
-                    )
-                    return
-            input_fields_json = json.dumps(parsed)
+        if input_fields:
+            if input_fields.strip():
+                parsed = [f.strip() for f in input_fields.split(",") if f.strip()]
+                for field in parsed:
+                    if field not in ALLOWED_ACTION_INPUT_FIELDS:
+                        await interaction.followup.send(
+                            f"❌ Invalid input field `{field}`. Allowed values: {', '.join(ALLOWED_ACTION_INPUT_FIELDS)}"
+                        )
+                        return
+                input_fields_json = json.dumps(parsed)
 
         # --- Check for duplicate ---
         with db_session() as session:
-            if get_action_by_key(session, action_key):
-                await interaction.followup.send(f"❌ Action `{action_key}` already exists.")
+            if actions_crud.get_action_by_key(
+                session=session, 
+                action_key=shortcode
+            ):
+                await interaction.followup.send(f"❌ Action `{shortcode}` already exists.")
                 return
 
-            # --- Create the action ---
-            crud_create_action(
+            action_create_data ={
+                "action_key": shortcode,
+                "action_description": description,
+                "input_fields_json": input_fields_json     
+            }
+
+            actions_crud.create_action(
                 session=session,
-                action_key=action_key,
-                description=description,
-                input_fields_json=input_fields_json
+                action_create_data=action_create_data
             )
 
         # --- Confirmation ---
         await interaction.followup.send(
             f"✅ **Action Created**\n"
-            f"**Key:** `{action_key}`\n"
+            f"**Key:** `{shortcode}`\n"
             f"**Description:** {description}\n"
             f"**Input fields:** {', '.join(json.loads(input_fields_json)) if input_fields_json else 'None'}"
         )
@@ -77,74 +84,97 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
 
     # === DELETE ACTION ===
     @admin_or_mod_check()
-    @app_commands.describe(action_key="The key of the action to delete")
+    @app_commands.describe(
+        shortcode="Shortcode of the action to delete"
+    )
     @app_commands.command(name="delete", description="Delete a global action type (if unused and active).")
-    async def delete_action(self, interaction: discord.Interaction, action_key: str):
+    async def delete_action(
+        self, 
+        interaction: discord.Interaction, 
+        shortcode: str
+    ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            action = get_action_by_key(session, action_key)
+            action = actions_crud.get_action_by_key(session, shortcode)
             if not action:
                 await interaction.followup.send(
-                    f"❌ Action `{action_key}` does not exist."
+                    f"❌ Action `{shortcode}` does not exist."
                 )
                 return
 
             # Block if inactive
-            if not action.active:
+            if not action.is_active:
                 await interaction.followup.send(
-                    f"❌ Action `{action_key}` is inactive. You cannot delete historical actions."
+                    f"❌ Action `{shortcode}` is inactive. You cannot delete historical actions."
                 )
                 return
 
             # Block if referenced in UserAction
             if action_is_used(session, action.id):
                 await interaction.followup.send(
-                    f"❌ Action `{action_key}` is referenced in user history and cannot be deleted.\n"
+                    f"❌ Action `{shortcode}` is referenced in user history and cannot be deleted.\n"
                     f"Deactivate it instead to keep history intact."
                 )
                 return
+            
+            action = actions_crud.delete_action(
+                session,
+                action_key=shortcode
+            )
+            if not action:
+            
+                await interaction.edit_original_response(content="❌ Event deletion failed unexpectedly.", view=None)
+                return
 
-            # Delete it
-            session.delete(action)
-
-        await interaction.followup.send(f"🗑️ Action `{action_key}` deleted successfully.")
+        await interaction.followup.send(f"🗑️ Action `{shortcode}` deleted successfully.")
 
 
     # === DEACTIVATE ACTION ===
     @admin_or_mod_check()
-    @app_commands.command(name="deactivate", description="Mark an action as inactive and version its key.")
     @app_commands.describe(
-        action_key="The key of the action to deactivate (will be versioned)"
+        shortcode="The key of the action to deactivate (will be versioned)"
     )
-    async def deactivate_action(self, interaction: discord.Interaction, action_key: str):
+    @app_commands.command(name="deactivate", description="Mark an action as inactive and version its key.")
+    async def deactivate_action(
+        self, 
+        interaction: discord.Interaction, 
+        shortcode: str
+    ):
+        
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
-            action = get_action_by_key(session, action_key)
+            action = actions_crud.get_action_by_key(session, shortcode)
             if not action:
-                await interaction.followup.send(f"❌ Action `{action_key}` does not exist.")
+                await interaction.followup.send(f"❌ Action `{shortcode}` does not exist.")
                 return
-            if not action.active:
-                await interaction.followup.send(f"⚠️ Action `{action_key}` is already inactive.")
+            if not action.is_active:
+                await interaction.followup.send(f"⚠️ Action `{shortcode}` is already inactive.")
                 return
 
             # Auto-version key: find next available `_vX`
-            base_key = action_key
+            base_key = shortcode
             version = 1
             while True:
                 candidate_key = f"{base_key}_v{version}"
-                if not get_action_by_key(session, candidate_key):
+                if not actions_crud.get_action_by_key(session, candidate_key):
                     break
                 version += 1
 
-            # Update record
-            action.action_key = candidate_key
-            action.active = False
-            action.deactivated_at = now_iso()
+            action_create_data ={
+                "action_key": candidate_key,
+                "is_active": False
+            }
+            
+            action = actions_crud.deactivate_action (
+                session=session,
+                action_key=shortcode,
+                action_update_data=action_create_data
+            )
 
         await interaction.followup.send(
-            f"✅ Action `{action_key}` has been deactivated and renamed to `{candidate_key}`.\n"
+            f"✅ Action `{shortcode}` has been deactivated and renamed to `{candidate_key}`.\n"
             f"It will no longer be available for linking to new events."
         )
 
@@ -174,9 +204,9 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
         }
     
         with db_session() as session:
-            actions = get_all_actions(
-                session,
-                active=None if show_inactive else True,
+            actions = actions_crud.get_all_actions(
+                session=session,
+                is_active=None if show_inactive else True,
                 key_search=search_key,
                 order_by="key"  # alphabetical for UI display
             )
@@ -189,7 +219,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     print(f"ERROR: Failed to parse input_fields for {action.action_key}: {e}")
                     input_fields = []
     
-                desc = action.description or "No description"
+                desc = action.action_description or "No description"
                 if len(desc) > 1000:
                     desc = desc[:1000] + "…"
     
@@ -197,11 +227,11 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
                     "key": action.action_key,
                     "desc": desc,
                     "input_fields": input_fields,
-                    "active": action.active
+                    "active": action.is_active
                 })
     
         if not parsed_actions:
-            await interaction.followup.send("ℹ️ No actions found with the current filters.", ephemeral=True)
+            await interaction.followup.send("ℹ️ No actions found with the current filters.")
             return
     
         # Build paginated embeds
@@ -237,7 +267,6 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     
         await paginate_embeds(interaction, pages)
 
-    
 
 async def setup(bot):
     await bot.add_cog(AdminActionCommands(bot))

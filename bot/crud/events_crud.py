@@ -17,6 +17,15 @@ def get_event_by_key(
     return session.query(Event).filter_by(event_key=event_key).first()
 
 
+def get_event_by_id(
+    session: Session, 
+    event_id: int
+) -> Optional[Event]:
+    """Retrieve an event by its internal event_key."""
+
+    return session.query(Event).filter_by(id=event_id).first()
+
+
 # --- CREATE ---
 def create_event(
     session: Session,
@@ -77,7 +86,7 @@ def update_event(
     log_description = f"Event {event.event_name} ({event.event_key}) updated."
     if reason:
         log_description += f" Reason: {reason}"
-    log_description += f" Updated fields: {', '.join(updated_fields)}"    
+    log_description += f" Updated fields: {', '.join(updated_fields)}" 
 
     general_crud.log_change(
         session=session,
@@ -186,14 +195,11 @@ def get_event_logs(
 # --- VALIDATE ---
 def is_event_active(
     session: Session, 
-    event_key: str
+    event_id: int
 ) -> bool:
     """Returns True if the event is active."""
     
-    event = get_event_by_key(
-        session=session, 
-        event_key=event_key
-    )
+    event = session.query(Event).filter_by(id=event_id).first()
     
     return bool(event and event.event_status == EventStatus.active)
 

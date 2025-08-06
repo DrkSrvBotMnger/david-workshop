@@ -29,22 +29,45 @@ def create_action(
     return action
 
 
+# --- UPDATE ---
+def deactivate_action(
+    session: Session,
+    action_key: str,
+    action_update_data: dict
+) -> Optional[Action]:
+
+    action = get_action_by_key(
+        session=session,
+        action_key=action_key
+    )
+
+    if not action:
+        return None
+
+    iso_now = now_iso()
+    action_update_data["deactivated_at"] =  iso_now    
+    for key, value in action_update_data.items():
+        setattr(action, key, value)
+
+    return action
+
+
 # --- DELETE ---
 def delete_action(
     session: Session,
     action_key: str
 ) -> bool:
-    
+
     action = get_action_by_key(
         session=session,
         action_key=action_key
     )
-    
+
     if not action:
         return False
-        
+
     session.delete(action)
-    
+
     return True
 
 

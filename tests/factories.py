@@ -14,6 +14,17 @@ def guild_with_member():
 
 
 @pytest.fixture
+def mock_interaction():
+    """Basic mock for a Discord interaction."""
+    m = MagicMock()
+    m.user.id = 1234
+    m.response.defer = AsyncMock()
+    m.followup.send = AsyncMock()
+    m.edit_original_response = AsyncMock()
+    return m
+
+
+@pytest.fixture
 def base_event(test_session):
     """Create a base Event for FK testing."""
     event = Event(

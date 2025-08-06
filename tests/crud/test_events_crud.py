@@ -109,14 +109,14 @@ def test_is_event_active_true(test_session):
     event = events_crud.create_event(test_session, data)
     test_session.commit()
 
-    assert events_crud.is_event_active(test_session, event.event_key) is True
+    assert events_crud.is_event_active(test_session, event.id) is True
 
 
 @pytest.mark.crud
 @pytest.mark.event
 def test_is_event_active_false(test_session, base_event):
     """Event should not be active unless status is active."""
-    assert events_crud.is_event_active(test_session, base_event.event_key) is False
+    assert events_crud.is_event_active(test_session, base_event.id) is False
 
 
 # --- UPDATE ---
