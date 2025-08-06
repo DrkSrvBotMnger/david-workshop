@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 from bot.utils import now_iso
-from db.schema import Action, ActionEvent
+from db.schema import Action, ActionEvent, Event, EventStatus
 from bot.crud import general_crud
 
 
@@ -106,12 +106,16 @@ def action_is_linked_to_active_event(
     session: Session,
     action_key: str
 ) -> bool:
-    """Returns True if a reward is linked to any active event."""
+    """Returns True if a action is linked to at least one active event."""
 
-    return general_crud.is_linked_to_active_event(
-        session=session,
-        link_model=ActionEvent,
-        link_field_name="action_id",
-        key_lookup_func=get_action_by_key,
-        public_key=action_key
+    return (
+        session.query(ActionEvent)
+        .join(Event, Event.id == ActionEvent.event_id)
+        .join(Action, Action.id == ActionEvent.action_id)
+        .filter(
+            Action.action_key == action_key,
+            Event.event_status == EventStatus.active
+        )
+        .count()
+        > 0
     )

@@ -4,11 +4,13 @@ from discord.ext import commands
 from typing import Optional
 
 from sqlalchemy.sql.base import _exclusive_against
-from bot.crud import events_crud, general_crud
+from bot.crud import events_crud, action_events_crud, reward_events_crud
 from bot.config import EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
 from bot.utils import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, parse_message_link, post_announcement_message
 from db.database import db_session
 from db.schema import EventLog, EventStatus
+from .event_dashboard_view import EventDashboardView, build_event_embed
+
 
 class AdminEventCommands(commands.GroupCog, name="admin_event"):
     """Admin commands for managing events."""
@@ -167,7 +169,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         end_date: Optional[str] = None,
         coordinator: Optional[discord.Member] = None,
         tags: Optional[str] = None,
-        priority: Optional[str] = None,
+        priority: Optional[int] = None,
         message_link: Optional[str] = None,
         role_id: Optional[discord.Role] = None,
         reason: Optional[str] = None
@@ -304,6 +306,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         confirmed = await confirm_action(
             interaction=interaction, 
             item_name=f"event `{shortcode}` ({safe_event_name})", 
+            item_action="delete",
             reason="Removal"
         )
         if not confirmed:
@@ -383,70 +386,73 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
     
             await paginate_embeds(interaction, pages)
 
-    
+
+
     # === SHOW EVENT METADATA ===
     @admin_or_mod_check()
-    @app_commands.describe(
-        shortcode="Shortcode of the event to show in detail"
-    )
     @app_commands.command(name="show", description="Display full metadata of a specific event.")
-    async def show_event(
-        self, 
-        interaction: Interaction, 
-        shortcode: str
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-    
+    async def show_event(self, interaction: Interaction, shortcode: str):
+        await interaction.response.defer(ephemeral=True)
+
         with db_session() as session:
-            event = events_crud.get_event_by_key(
-                session=session, 
-                event_key=shortcode)
+            # --- Get Event ---
+            event = events_crud.get_event_by_key(session, event_key=shortcode)
             if not event:
                 await interaction.followup.send(f"❌ Event `{shortcode}` not found.")
                 return
 
-            end_date = event.end_date or "*Ongoing*"
-            status_icons = {
-                "draft": "📝 Draft",
-                "visible": "🔎 Visible",
-                "active": "🎉 Active",
-                "archived": "📦 Archived"
+            # --- Convert Event to dict ---
+            event_data = {
+                "event_name": event.event_name,
+                "event_key": event.event_key,
+                "start_date": event.start_date,
+                "end_date": event.end_date,
+                "tags": event.tags,
+                "event_description": event.event_description,
+                "created_by": event.created_by,
+                "created_at": event.created_at,
+                "modified_by": event.modified_by,
+                "modified_at": event.modified_at,
+                "priority": event.priority,
+                "coordinator_discord_id": event.coordinator_discord_id,
+                "role_discord_id": event.role_discord_id,
+                "embed_message_discord_id": event.embed_message_discord_id,
+                "embed_channel_discord_id": event.embed_channel_discord_id,
+                "event_status": event.event_status.value,
+                "event_type": event.event_type
             }
-            event_status = status_icons.get(event.event_status.value, event.event_status.value.capitalize())
-            event_type = event.event_type.capitalize()
-            role_status = "✅" if event.role_discord_id else "❌"
-            embed_status = "✅" if event.embed_message_discord_id else "❌"
-            coordinator_display = f"<@{event.coordinator_discord_id}>" if event.coordinator_discord_id else "*None*"
 
-            tag_display = event.tags if event.tags else "*None*"
-            description = event.event_description if event.event_description else "*No description*"
-            priority = str(event.priority)
-            created_edited = f"By: <@{event.created_by}> at {format_discord_timestamp(event.created_at)}"
-            if event.modified_by :
-                created_edited = f"{created_edited}\nLast: <@{event.modified_by}> at {format_discord_timestamp(event.modified_at)}"
-            
-            embed = Embed(title=f"📋 Event Details: {event.event_name}", color=0x7289DA)
-            embed.add_field(name="🆔 Shortcode", value=event.event_key, inline=False)  
-            embed.add_field(name="📅 Dates", value=f"Start: {event.start_date}\nEnd: {end_date}", inline=True)
-            embed.add_field(name="📌 Status", value=event_status, inline=True)
-            embed.add_field(name="🎉 Type", value=event_type, inline=True)
+            # --- Get linked Actions ---
+            action_events = action_events_crud.get_action_events_for_event(session, event.id)
+            actions_data = []
+            for ae in action_events:
+                actions_data.append({
+                    "action_key": ae.action.action_key if ae.action else None,
+                    "variant": ae.variant,
+                    "points_granted": ae.points_granted,
+                    "reward_event_key": ae.reward_event.reward_event_key if ae.reward_event else None,
+                    "is_allowed_during_visible": ae.is_allowed_during_visible,
+                    "is_self_reportable": ae.is_self_reportable,
+                    "input_help_text": ae.input_help_text
+                })
 
-            embed.add_field(name="👤 Coordinator", value=coordinator_display, inline=True)       
-            
-            embed.add_field(name="🎭 Role", value=role_status, inline=True)
-            embed.add_field(name="🧵 Embed?", value=embed_status, inline=True)
-            embed.add_field(name="⭐ Priority", value=priority, inline=True)
-            embed.add_field(name=" ", value="", inline=True)
+            # --- Get linked Rewards ---
+            reward_events = reward_events_crud.get_reward_events_for_event(session, event.id)
+            rewards_data = []
+            for re in reward_events:
+                rewards_data.append({
+"reward_name":re.reward.reward_name,
+                    "reward_key": re.reward.reward_key if re.reward else None,
+                    "price": re.price,
+                    "availability": re.availability
+                })
 
-            embed.add_field(name="🏷️ Tags", value=tag_display, inline=False)
-            embed.add_field(name="✏️ Description", value=description, inline=False)
-            if event.embed_message_discord_id and interaction.guild:
-                jump_link = f"https://discord.com/channels/{interaction.guild.id}/{event.embed_channel_discord_id}/{event.embed_message_discord_id}"
-                embed.add_field(name="🔗 Embed Link", value=f"[Jump to Embed]({jump_link})", inline=False)
-            
-            embed.add_field(name="👩‍💻 Created / Edited By", value=created_edited, inline=False)
-    
-            await interaction.followup.send(embed=embed)
+        # --- Create View ---
+        guild_id = interaction.guild.id if interaction.guild else None
+        view = EventDashboardView(event_data, actions_data, rewards_data, guild_id)
+
+        # --- Send initial view ---
+        await interaction.followup.send(embed=build_event_embed(event_data, guild_id), view=view)
 
 
     # === EVENT LOGS ===

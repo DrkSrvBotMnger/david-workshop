@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from bot.crud import general_crud
 from bot.utils import now_iso
-from db.schema import Reward, RewardLog, RewardEvent
+from db.schema import Reward, RewardLog, RewardEvent, Event, EventStatus
 
 
 # --- GET ---
@@ -222,7 +222,7 @@ def publish_preset(
         performed_by=set_by_discord_id,
         performed_at=iso_now,
         log_description=f"Published/updated preset for reward `{reward.reward_key}`.",
-        forced=True
+        forced=forced
     )
 
     return reward
@@ -233,12 +233,16 @@ def reward_is_linked_to_active_event(
     session: Session,
     reward_key: str
 ) -> bool:
-    """Returns True if a reward is linked to any active event."""
-    
-    return general_crud.is_linked_to_active_event(
-        session=session,
-        link_model=RewardEvent,
-        link_field_name="reward_id",
-        key_lookup_func=get_reward_by_key,
-        public_key=reward_key
+    """Returns True if a reward is linked to at least one active event."""
+
+    return (
+        session.query(RewardEvent)
+        .join(Event, Event.id == RewardEvent.event_id)
+        .join(Reward, Reward.id == RewardEvent.reward_id)
+        .filter(
+            Reward.reward_key == reward_key,
+            Event.event_status == EventStatus.active
+        )
+        .count()
+        > 0
     )

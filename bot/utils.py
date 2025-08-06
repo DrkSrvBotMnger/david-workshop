@@ -127,13 +127,27 @@ class ConfirmActionView(ui.View):
 async def confirm_action(
     interaction: discord.Interaction, 
     item_name: str,
+    item_action: str,
     reason: str
 ) -> bool:
 
-    print("in confirm_action")
     view = ConfirmActionView()
-    msg = (f"🗑️ Are you sure you want to delete **{item_name}**?\n"
-           f"This cannot be undone.\n")
+    msg=""
+    if item_action == "delete":
+        msg = (
+            f"🗑️ Are you sure you want to delete **{item_name}**?\n"
+            f"This cannot be undone.\n"
+        )
+    if item_action == "force_update":
+        msg = (
+            f"⚠️ Are you sure you want to update **{item_name}**?\n"
+            f"This cannot be undone.\n"
+        )
+    if item_action == "force_delete":
+        msg = (
+            f"⚠️ Are you **really** sure you want to delete **{item_name}**?\n"
+            f"This cannot be undone.\n"
+        )
 
     view.message = await interaction.edit_original_response(content=msg,
                                                             view=view)

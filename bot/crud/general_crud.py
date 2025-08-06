@@ -38,36 +38,3 @@ def log_change(
     session.add(log_entry)
     
     return log_entry
-
-
-# --- ACTIVE EVENT ---
-def is_linked_to_active_event(
-    session: Session,
-    link_model: Type[DeclarativeMeta],  # e.g., RewardEvent, ActionEvent
-    link_field_name: str,  # FK column name in link_model
-    key_lookup_func: Callable[[Session, str], Optional[object]],  # CRUD getter
-    public_key: str,  # reward_key / action_key
-) -> bool:
-    """
-    Checks if the object identified by public_key is linked to at least one active event.
-    """
-
-    # Step 1: Find the object via its CRUD lookup
-    obj = key_lookup_func(session, public_key)
-    if not obj:
-        return False
-
-    # Make sure ID exists (important for uncommitted test objects)
-    session.flush()
-
-    # Step 2: Get the linking field dynamically
-    link_field = getattr(link_model, link_field_name)
-
-    # Step 3: Query the linking table for an active event
-    return (
-        session.query(link_model)
-        .join(Event, Event.id == link_model.event_id)
-        .filter(link_field == obj.id, Event.event_status == EventStatus.active)
-        .count()
-        > 0
-    )

@@ -159,6 +159,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     stackable is not None,
                     emoji is not None
                 ])
+                
                 if blocked_fields and not force:
                     await interaction.followup.send(
                         "❌ This reward is linked to an **active event**. "
@@ -170,6 +171,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     confirmed = await confirm_action(
                         interaction,
                         f"reward `{shortcode}` linked to an ACTIVE event",
+                        "force_update",
                         "⚠️ **FORCED OVERRIDE** — this may impact participants!")
                     if not confirmed:
                         return
@@ -243,12 +245,14 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
         confirmed = await confirm_action(
             interaction=interaction, 
             item_name=f"reward `{shortcode}`", 
+            item_action="delete",
             reason="Removal"
         )
         
         if not confirmed:
             await interaction.edit_original_response(content="❌ Deletion cancelled or timed out.", view=None)
-
+            return
+        else:
             if rewards_crud.reward_is_linked_to_active_event(
                 session=session, 
                 reward_key=shortcode
@@ -261,13 +265,14 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     confirmed = await confirm_action(
                         interaction=interaction,
                         item_name=f"reward `{shortcode}` linked to an ACTIVE event",
+                        item_action="force_delete",
                         reason="⚠️ **FORCED DELETE** — this will impact participants!"
                     )
                     
-                if not confirmed:
-                    return
+                    if not confirmed:
+                            await interaction.edit_original_response(content="❌ Deletion cancelled or timed out.", view=None)
+                            return
 
-            return
 
         with db_session() as session:
             rewards_crud.delete_reward(
@@ -493,6 +498,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                     confirmed = await confirm_action(
                         interaction,
                         f"reward `{reward_key}` linked to an ACTIVE event",
+                        "force_update",
                         "⚠️ **FORCED REPUBLISH** — participants may see changed content!"
                     )
                     if not confirmed:
