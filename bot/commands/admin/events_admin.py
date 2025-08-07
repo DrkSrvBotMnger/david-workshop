@@ -437,7 +437,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 })
 
             # --- Get linked Rewards ---
-            reward_events = reward_events_crud.get_reward_events_for_event(session, event.id)
+            reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
             rewards_data = []
             for re in reward_events:
                 rewards_data.append({

@@ -102,7 +102,7 @@ async def test_confirm_action_returns_true():
         mock_view_cls.return_value = mock_view
 
         interaction = AsyncMock()
-        result = await utils.confirm_action(interaction, "Test Item", "Reason")
+        result = await utils.confirm_action(interaction, "Test Item", "create", "Reason")
         assert result is True
 
 
@@ -119,7 +119,7 @@ async def test_confirm_action_returns_false_if_not_confirmed():
         mock_view_cls.return_value = mock_view
 
         interaction = AsyncMock()
-        result = await utils.confirm_action(interaction, "Test Item", "Reason")
+        result = await utils.confirm_action(interaction, "Test Item", "create", "Reason")
         assert result is False
 
 

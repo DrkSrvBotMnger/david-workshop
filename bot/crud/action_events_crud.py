@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from bot.config import EXCLUDED_LOG_FIELDS
 from bot.crud import general_crud
-from bot.utils import now_iso
 from db.schema import ActionEvent, ActionEventLog
 
 
@@ -32,13 +31,10 @@ def get_action_events_for_event(
 # --- CREATE ---
 def create_action_event(
     session: Session, 
-    ae_create_data: dict
+    ae_create_data: dict,
+    force: bool = False
 ) -> ActionEvent:
     """Create a new action event and log the action."""
-
-    iso_now=now_iso()
-
-    ae_create_data.setdefault("created_at", iso_now)
 
     ae = ActionEvent(**ae_create_data)
     session.add(ae)
@@ -51,8 +47,9 @@ def create_action_event(
         fk_value=ae.id,
         log_action="create",
         performed_by=ae.created_by,
-        performed_at=iso_now,
-        log_description=f"Linked action {ae.action_id} to event {ae.event_id}. Shortcode: '{ae.action_event_key}'."
+        performed_at=ae.created_at,
+        log_description=f"Linked action {ae.action_id} to event {ae.event_id}. Shortcode: '{ae.action_event_key}'.",
+        forced=force
     )
     
     return ae
@@ -63,7 +60,7 @@ def update_action_event(
     session: Session,
     action_event_key: str,
     ae_update_data: dict, 
-    reason: Optional[str] = None
+    force: bool = False
 ) -> Optional[ActionEvent]:
     """
     Update an action event with the given updates dict and log the action.
@@ -76,18 +73,9 @@ def update_action_event(
     )
     if not ae:
         return None
-        
-    iso_now = now_iso()
-    ae_update_data["modified_at"] =  iso_now    
+          
     for key, value in ae_update_data.items():
         setattr(ae, key, value)
-
-    updated_fields = [k for k in ae_update_data.keys() if k not in EXCLUDED_LOG_FIELDS]
-
-    log_description = f"Action-Event link '{action_event_key}' updated."
-    if reason:
-        log_description += f" Reason: {reason}"
-    log_description += f" Updated fields: {', '.join(updated_fields)}" 
 
     general_crud.log_change(
         session=session,
@@ -96,8 +84,9 @@ def update_action_event(
         fk_value=ae.id,
         log_action="edit",
         performed_by=ae.modified_by,
-        performed_at=iso_now,
-        log_description=log_description
+        performed_at=ae.modified_at,
+        log_description= f"Action-Event link '{action_event_key}' updated.",
+        forced=force
     )
 
     return ae
@@ -107,7 +96,8 @@ def delete_action_event(
     session: Session,
     action_event_key: str, 
     performed_by: str,
-    reason: str
+    performed_at: str,
+    force: bool = False
 ) -> bool:
     """Delete an event and log the action."""
 
@@ -119,8 +109,6 @@ def delete_action_event(
     if not ae:
         return False
 
-    iso_now=now_iso()
-
     # Log event deletion
     general_crud.log_change(
         session=session, 
@@ -129,8 +117,9 @@ def delete_action_event(
         fk_value=ae.id,
         log_action="delete", 
         performed_by=performed_by,
-        performed_at=iso_now,
-        log_description= f"Unlinked Action-Event '{action_event_key}'. Reason: {reason}."
+        performed_at=performed_at,
+        log_description= f"Unlinked Action-Event '{action_event_key}'.",
+        forced=force
     )
 
     session.delete(ae)

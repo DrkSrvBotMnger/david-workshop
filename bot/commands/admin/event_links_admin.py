@@ -1,456 +1,879 @@
-import discord
-from typing import Optional
 from discord import app_commands, Interaction
 from discord.ext import commands
-from sqlalchemy.exc import IntegrityError
-from bot.crud import action_events_crud, reward_events_crud, events_crud, rewards_crud, actions_crud
-from bot.utils import admin_or_mod_check, paginate_embeds, now_iso, confirm_action
+from bot.utils import admin_or_mod_check, now_iso
 from db.database import db_session
+from db.schema import RewardEvent
+from bot.crud import events_crud, rewards_crud, reward_events_crud, actions_crud, action_events_crud
+
+from .event_link_views import (
+    EventSelect, RewardSelect, RewardEventSelect, AvailabilitySelect, PricePicker, ForceConfirmView, ActionEventSelect,
+    ActionSelect, VariantPickerView, HelpTextPickerView, YesNoView, ToggleYesNoView,
+    SingleSelectView, PointPickerView
+)
 
 
-class EventLinksAdmin(commands.Cog):
+class EventLinksAdminFriendly(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     admin_links = app_commands.Group(
         name="admin_links",
-        description="Manage Action-Event and Reward-Event links (Admin only)."
+        description="Manage Reward-Event links with optional action linking"
     )
 
-    
-    # ========== REWARD EVENT COMMANDS ==========
-    # === LINK REWARD EVENT ===
     @admin_or_mod_check()
     @admin_links.command(name="link_reward_event")
-    @app_commands.choices(
-        availability=[
-            app_commands.Choice(name="in shop", value="inshop"),
-            app_commands.Choice(name="on action", value="onaction")
-        ]
-    )
-    @app_commands.describe(
-        event_shortcode="Shortcode of the event",
-        reward_shortcode="Shortcode of the reward",
-        availability="in shop or on action",
-        price="Price if availability is 'in shop'"
-    )
-    async def link_reward_event(
-        self,
-        interaction: Interaction,
-        event_shortcode: str,
-        reward_shortcode: str,
-        availability: app_commands.Choice[str],
-        price: int = 0
-    ):
-        """Link a reward to an event."""
-        await interaction.response.defer(thinking=True, ephemeral=True)
+    async def link_reward_event(self, interaction: Interaction):
+        """Link a reward to an event, optionally attaching an action if on-action."""
+        await interaction.response.defer(ephemeral=True)
+        force = False
 
-        try:
-            with db_session() as session:
-                event = events_crud.get_event_by_key(session, event_shortcode)
-                if not event:
-                    await interaction.followup.send(f"❌ Event `{event_shortcode}` not found.")
-                    return
-                if events_crud.is_event_active(session, event.id):
-                    await interaction.followup.send("❌ Cannot link rewards to an active event.")
-                    return
+        msg_timeout=("❌ Action timed out and cancelled.")
+        
+        with db_session() as session:
+            # === Step 1: Select Event ===
+            events = events_crud.get_all_events(session)
+            if not events:
+                return await interaction.followup.send("❌ No events found.", ephemeral=True)
 
-                reward = rewards_crud.get_reward_by_key(session, reward_shortcode)
-                if not reward:
-                    await interaction.followup.send(f"❌ Reward `{reward_shortcode}` not found.")
-                    return
-                if reward.reward_type == "preset" and not reward.use_message_discord_id:
-                    await interaction.followup.send("❌ Cannot attach to an unpublished preset reward.")
-                    return
+            event_view = SingleSelectView(EventSelect(events))
+            await interaction.followup.send("📌 Select the event:", view=event_view, ephemeral=True)
+            await event_view.wait()
+            if not event_view.selected_event_key:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
 
-                # Auto-generate key
-                reward_event_key = f"{event_shortcode.lower()}_{reward_shortcode.lower()}_{availability.value}"
+            event = events_crud.get_event_by_key(session, event_view.selected_event_key)
+            if not event:
+                return await interaction.followup.send("❌ Invalid event.", ephemeral=True)
 
-                existing_re = reward_events_crud.get_reward_event_by_key(session, reward_event_key)
-                if existing_re:
-                    await interaction.followup.send(
-                        f"❌ The reward **{reward.reward_name}** (`{reward.reward_key}`) "
-                        f"is already linked to the event **{event.event_name}** (`{event.event_key}`) "
-                        f"with the availability '{availability.name}'."
-                    )
-                    return
+            # Active event check
+            if events_crud.is_event_active(session, event.id):
+                confirm_view = ForceConfirmView(f"⚠️ **{event.event_name}** is active. Link anyway?")
+                await interaction.followup.send(confirm_view.prompt, view=confirm_view, ephemeral=True)
+                await confirm_view.wait()
+                if not confirm_view.confirmed:
+                    return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+                force = True
 
-                if price < 0:
-                    await interaction.followup.send("❌ Price must be a non-negative number.")
-                    return
-                if availability.value == "onaction" and price != 0:
-                    await interaction.followup.send("❌ Price must be 0 when availability is 'on action'.")
-                    return
+            # === Step 2: Select Reward (only unlinked) ===
+            all_rewards = rewards_crud.get_all_rewards(session)
+            linked_ids = {re.reward_id for re in session.query(RewardEvent).filter_by(event_id=event.id).all()}
+            available_rewards = [rw for rw in all_rewards if rw.id not in linked_ids]
 
-                re_create_data = {
-                    "reward_event_key": reward_event_key,
+            if not available_rewards:
+                return await interaction.followup.send(
+                    f"❌ All rewards are already linked to **{event.event_name}**.",
+                    ephemeral=True
+                )
+
+            reward_view = SingleSelectView(RewardSelect(available_rewards))
+            await interaction.followup.send("📌 Select the reward:", view=reward_view, ephemeral=True)
+            await reward_view.wait()
+            if not reward_view.selected_reward_key:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+
+            reward = rewards_crud.get_reward_by_key(session, reward_view.selected_reward_key)
+            if not reward:
+                return await interaction.followup.send("❌ Invalid reward.", ephemeral=True)
+
+            # === Step 3: Select Availability ===
+            avail_view = SingleSelectView(AvailabilitySelect())
+            await interaction.followup.send("📌 Select availability:", view=avail_view, ephemeral=True)
+            await avail_view.wait()
+            if not avail_view.selected_availability:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+            availability = avail_view.selected_availability
+
+            # === Step 4: Price ===
+            price = 0
+            if availability == "inshop":
+                picker = PricePicker()
+                await interaction.followup.send("💰 Choose a price:", view=picker, ephemeral=True)
+                await picker.wait()
+                if picker.selected_price is None:
+                    return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+                price = picker.selected_price
+
+            # === Step 5: Create Reward-Event ===
+            re_key = f"{event.event_key.lower()}_{reward.reward_key.lower()}_{availability}"
+            if reward_events_crud.get_reward_event_by_key(session, re_key):
+                return await interaction.followup.send("❌ This reward is already linked.", ephemeral=True)
+
+            iso_now = now_iso()
+            
+            reward_event = reward_events_crud.create_reward_event(
+                session,
+                {
+                    "reward_event_key": re_key,
                     "reward_id": reward.id,
                     "event_id": event.id,
-                    "availability": availability.value,
+                    "availability": availability,
                     "price": price,
-                    "created_by": str(interaction.user.id)
-                }
+                    "created_by": str(interaction.user.id),
+                    "created_at": iso_now
+                },
+                force=force
+            )
+            
+            # === Step 6: Announce reward creation ===
+            if availability == "inshop":
+                availability_display = f"in shop for {price} vlachka"
+            else:
+                availability_display = "on action"
 
-                reward_event = reward_events_crud.create_reward_event(session, re_create_data)
+            msg_re_success=(f"✅ Linked reward **{reward.reward_name}** to event **{event.event_name}** — {availability_display}")
+            msg_ae_fail=("❌ No action was linked.")
+            
+            if availability == "inshop":
+                return await interaction.followup.send(f"{msg_re_success}", ephemeral=True)
 
-                await interaction.followup.send(
-                    f"✅ Linked reward **{reward.reward_name}** (`{reward.reward_key}`) "
-                    f"to event **{event.event_name}** (`{event.event_key}`) "
-                    f"with the shortcode `{reward_event.reward_event_key}`."
-                )
+            # === Step 7: Optional action attachment ===
+            if availability == "onaction":
+                attach_view = YesNoView("Do you want to attach an action to this reward now?")
+                await interaction.followup.send(attach_view.prompt, view=attach_view, ephemeral=True)
+                await attach_view.wait()
+                if attach_view.confirmed is None:
+                    return await interaction.followup.send(
+                        f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                        ephemeral=True
+                    )
+                if attach_view.confirmed is False:
+                    return await interaction.followup.send(
+                        f"{msg_re_success}\n{msg_ae_fail}",
+                        ephemeral=True
+                    )
 
-        except Exception as e:
-            print(f"❌ DB failure: {e}")
-            await interaction.followup.send("❌ An unexpected error occurred.")
+                if attach_view.confirmed:
+                    # === Step A: Get all active actions ===
+                    active_actions = [a for a in actions_crud.get_all_actions(session) if a.is_active]
+                    if not active_actions:
+                        await interaction.followup.send(
+                            f"❌ No active actions available for **{event.event_name}**.\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                        return
 
+                    # === Step B: Select Action ===
+                    action_view = SingleSelectView(ActionSelect(active_actions))
+                    await interaction.followup.send("📌 Select the action:", view=action_view, ephemeral=True)
+                    await action_view.wait()
+                    if not action_view.selected_action_key:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    action = actions_crud.get_action_by_key(session, action_view.selected_action_key)
+                    if not action:
+                        await interaction.followup.send(
+                            f"❌ Invalid action.\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                        return
 
-    # === EDIT REWARD EVENT ===
+                    # === Step C: Select Variant ===
+                    variant_picker = VariantPickerView()
+                    await interaction.followup.send("📌 Select variant:", view=variant_picker, ephemeral=True)
+                    await variant_picker.wait()
+                    if not variant_picker.selected_variant:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )             
+
+                    variant = variant_picker.selected_variant
+
+                    # --- Build unique action_event_key ---
+                    variant_clean = variant.strip().lower().replace(" ", "_")
+                    ae_key = f"{event.event_key.lower()}_{action.action_key.lower()}_{variant_clean}"
+                    
+                    # Duplicate check for action-event variant
+                    if action_events_crud.get_action_event_by_key(session, ae_key):
+                        await interaction.followup.send(
+                            f"❌ Action '{action.action_key}' with variant '{variant}' already exists for the event.\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                        return
+
+                    # === Step D: is_allowed_during_visible ===
+                    allowed_view = ToggleYesNoView("Allow during visible period?")
+                    await interaction.followup.send(allowed_view.prompt, view=allowed_view, ephemeral=True)
+                    await allowed_view.wait()
+                    if allowed_view.value is None:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    is_allowed_during_visible = allowed_view.value
+
+                    # === Step E: is_self_reportable ===
+                    reportable_view = ToggleYesNoView("Allow self-report?")
+                    await interaction.followup.send(reportable_view.prompt, view=reportable_view, ephemeral=True)
+                    await reportable_view.wait()
+                    if reportable_view.value is None:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    is_self_reportable = reportable_view.value
+
+                    # === Step F: Input help text ===
+                    help_view = HelpTextPickerView()
+                    await interaction.followup.send("💬 Do you want to add help text for users?", view=help_view, ephemeral=True)
+                    await help_view.wait()
+                    if help_view.help_text is None:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    if help_view.help_text is False:
+                        input_help_text = ""
+                        
+                    input_help_text = help_view.help_text
+
+                    # === Step G: Create Action-Event ===
+                    action_events_crud.create_action_event(
+                        session,
+                        {
+                            "action_event_key": ae_key,
+                            "action_id": action.id,
+                            "event_id": event.id,
+                            "variant": variant,
+                            "is_allowed_during_visible": is_allowed_during_visible,
+                            "is_self_reportable": is_self_reportable,
+                            "input_help_text": input_help_text,
+                            "reward_event_id": reward_event.id,
+                            "created_by": str(interaction.user.id),
+                            "created_at": iso_now
+                        },
+                        force=force
+                    )
+
+                    action_key = action.action_key
+                    
+                    await interaction.followup.send(
+                        f"{msg_re_success}\n"
+                        f"✅ Linked action **{action_key}** ({variant}) to the reward.",
+                        ephemeral=True
+                    )
+
+    
+    # ====== EDIT REWARD EVENT ======
     @admin_or_mod_check()
     @admin_links.command(name="edit_reward_event")
-    @app_commands.choices(
-        availability=[
-            app_commands.Choice(name="in shop", value="inshop"),
-            app_commands.Choice(name="on action", value="onaction")
-        ]
-    )
-    @app_commands.describe(
-        reward_event_key="Shortcode of the reward-event link to edit",
-        availability="Updated availability (in shop/on action)",
-        price="Updated price",
-        reason="Optional reason for editing (will be logged)",
-        force="Override restrictions for active events"
-    )
-    async def edit_reward_event(
-        self,
-        interaction: Interaction,
-        reward_event_key: str,
-        availability: Optional[app_commands.Choice[str]] = None,
-        price: Optional[int] = None,
-        reason: Optional[str] = None,
-        force: bool = False
-    ):
-        """Edit the availability and/or price of a reward-event link."""
-        await interaction.response.defer(thinking=True, ephemeral=True)
+    async def edit_reward_event(self, interaction: Interaction):
+        """Edit a reward-event link, including price or attached action-event."""
+        await interaction.response.defer(ephemeral=True)
+        force = False
 
+        msg_timeout=("❌ Action timed out and cancelled.")
+        
         with db_session() as session:
-            reward_event = reward_events_crud.get_reward_event_by_key(session, reward_event_key)
+            # === Step 1: Select Event ===
+            events = events_crud.get_all_events(session)
+            event_view = SingleSelectView(EventSelect(events))
+            await interaction.followup.send("📌 Select event:", view=event_view, ephemeral=True)
+            await event_view.wait()
+            if not event_view.selected_event_key:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+
+            event = events_crud.get_event_by_key(session, event_view.selected_event_key)
+            if not event:
+                return await interaction.followup.send("❌ Invalid event.", ephemeral=True)
+
+            if events_crud.is_event_active(session, event.id):
+                confirm_view = ForceConfirmView(f"⚠️ **{event.event_name}** is active. Edit anyway?")
+                await interaction.followup.send(confirm_view.prompt, view=confirm_view, ephemeral=True)
+                await confirm_view.wait()
+                if not confirm_view.confirmed:
+                    return await interaction.followup.send("❌ Edit cancelled.", ephemeral=True)
+                force = True
+
+            # === Step 2: Select Reward-Event to Edit ===
+            reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
+            re_view = SingleSelectView(RewardEventSelect(reward_events))
+            await interaction.followup.send("📌 Select reward-event to edit:", view=re_view, ephemeral=True)
+            await re_view.wait()
+            if not re_view.selected_reward_event_key:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+
+            reward_event = reward_events_crud.get_reward_event_by_key(session, re_view.selected_reward_event_key)
             if not reward_event:
-                await interaction.followup.send(f"❌ Reward-event link `{reward_event_key}` not found.")
-                return
-                
-            if events_crud.is_event_active(session, reward_event.event_id):
-                if not force:
-                    await interaction.followup.send(
-                        "❌ Cannot edit a reward-event linked to an active event without `--force`."
-                    )
-                    return
-                else:
-                    confirmed = await confirm_action(
-                        interaction=interaction,
-                        item_name=f"the reward-event `{reward_event_key}` linked to an ACTIVE event",
-                        item_action="force_edit",
-                        reason="⚠️ **FORCED EDIT** — this may affect participants!"
-                    )
-                    if not confirmed:
-                        await interaction.followup.send("❌ Forced edit cancelled or timed out.")
-                        return
+                return await interaction.followup.send("❌ Invalid reward-event.", ephemeral=True)
 
-            # Use new availability if provided, else keep current
-            availability_value = availability.value if availability else reward_event.availability
+            original_availability = reward_event.availability
+            existing_action_event = session.query(action_events_crud.ActionEvent).filter_by(
+                reward_event_id=reward_event.id).first()
 
-            re_update_data = {}
-            if availability and availability_value != reward_event.availability:
-                re_update_data["availability"] = availability_value
+            # === Step 3: Choose New Availability ===
+            avail_view = SingleSelectView(AvailabilitySelect())
+            await interaction.followup.send("📌 Select new availability:", view=avail_view, ephemeral=True)
+            await avail_view.wait()
+            if not avail_view.selected_availability:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
 
-            if price is not None and price != reward_event.price:
-                if price < 0:
-                    await interaction.followup.send("❌ Price must be a non-negative number.")
-                    return
-                if availability_value == "onaction" and price != 0:
-                    await interaction.followup.send("❌ Price must be 0 when availability is 'on action'.")
-                    return
-                re_update_data["price"] = price
+            new_availability = avail_view.selected_availability
 
-            if not re_update_data:
-                await interaction.followup.send("❌ No valid fields provided to update.")
-                return
+            # === Step 4: Choose Price if inshop ===
+            new_price = 0
+            if new_availability == "inshop":
+                picker = PricePicker()
+                await interaction.followup.send("💰 Choose new price:", view=picker, ephemeral=True)
+                await picker.wait()
+                if picker.selected_price is None:
+                    return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+                new_price = picker.selected_price
 
-            re_update_data["modified_by"] = str(interaction.user.id)
-
+            iso_now = now_iso()
+            
+            # === Step 5: Update reward-event itself ===
             reward_events_crud.update_reward_event(
-                session, reward_event_key, re_update_data, reason, force
+                session,
+                reward_event.reward_event_key,
+                {
+                    "availability": new_availability,
+                    "price": new_price,
+                    "modified_by": str(interaction.user.id),
+                    "modified_at": iso_now
+                },
+                force=force
             )
 
-            await interaction.followup.send(
-                f"✅ Updated reward-event **{reward_event.reward.reward_name}** "
-                f"(`{reward_event.reward.reward_key}`) for event **{reward_event.event.event_name}** "
-                f"(`{reward_event.event.event_key}`)."
-            )
+            # === Step 6: Remove existing AE ===
+            if existing_action_event:
+                action_events_crud.delete_action_event(
+                    session,
+                    existing_action_event.action_event_key, 
+                    str(interaction.user.id),
+                    iso_now,
+                    force=force)
+                session.flush()
+
+            if new_availability == "inshop":
+                new_availability_display = f"now in shop for {new_price} vlachka"
+            else:
+                new_availability_display = "now on action"
+
+            msg_re_success=(f"✅ Updated reward **{reward_event.reward.reward_name}** to event **{event.event_name}** — {new_availability_display}")
+            msg_ae_fail=("No new action was linked.")
+            msg_del_success=("")
+            
+            if original_availability == "onaction":
+                msg_del_success = ("🗑️ Removed any previous action-event link. ")
+                
+            if new_availability == "inshop":
+                    return await interaction.followup.send(f"{msg_re_success}\n{msg_del_success}", ephemeral=True)
+            
+            # === Step 7: Action attachment ===
+            if new_availability == "onaction":
+                attach_view = YesNoView("Do you want to attach an action to this reward now?")
+                await interaction.followup.send(attach_view.prompt, view=attach_view, ephemeral=True)
+                await attach_view.wait()
+                if attach_view.confirmed is None:
+                    return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                        ephemeral=True
+                    )
+                if attach_view.confirmed is False:
+                    return await interaction.followup.send(f"{msg_ae_fail}\n{msg_re_success}",
+                        ephemeral=True
+                    )
+        
+                if attach_view.confirmed:
+                    # === Step A: Get all active actions ===
+                    active_actions = [a for a in actions_crud.get_all_actions(session) if a.is_active]
+                    if not active_actions:
+                        await interaction.followup.send(
+                            f"❌ No active actions available for **{event.event_name}**.\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                        ephemeral=True
+                    )
+                        return
+        
+                    # === Step B: Select Action ===
+                    action_view = SingleSelectView(ActionSelect(active_actions))
+                    await interaction.followup.send("📌 Select the action:", view=action_view, ephemeral=True)
+                    await action_view.wait()
+                    if not action_view.selected_action_key:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    action = actions_crud.get_action_by_key(session, action_view.selected_action_key)
+                    if not action:
+                        return await interaction.followup.send(f"❌ Invalid action.\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                        return
+        
+                    # === Step C: Select Variant ===
+                    variant_picker = VariantPickerView()
+                    await interaction.followup.send("📌 Select variant:", view=variant_picker, ephemeral=True)
+                    await variant_picker.wait()
+                    if not variant_picker:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )         
+                
+                    variant = variant_picker.selected_variant
+        
+                    # --- Build unique action_event_key ---
+                    variant_clean = variant.strip().lower().replace(" ", "_")
+                    ae_key = f"{event.event_key.lower()}_{action.action_key.lower()}_{variant_clean}"
+        
+                    # Duplicate check for action-event variant
+                    if action_events_crud.get_action_event_by_key(session, ae_key):
+                        await interaction.followup.send(
+                            f"❌ Action '{action.action_key}' with variant '{variant}' already exists for the event.\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                        return
+        
+                    # === Step D: is_allowed_during_visible ===
+                    allowed_view = ToggleYesNoView("Allow during visible period?")
+                    await interaction.followup.send(allowed_view.prompt, view=allowed_view, ephemeral=True)
+                    await allowed_view.wait()
+                    if allowed_view.value is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    is_allowed_during_visible = allowed_view.value
+        
+                    # === Step E: is_self_reportable ===
+                    reportable_view = ToggleYesNoView("Allow self-report?")
+                    await interaction.followup.send(reportable_view.prompt, view=reportable_view, ephemeral=True)
+                    await reportable_view.wait()
+                    if reportable_view.value is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    is_self_reportable = reportable_view.value
+        
+                    # === Step F: Input help text ===
+                    help_view = HelpTextPickerView()
+                    await interaction.followup.send("💬 Do you want to add help text for users?", view=help_view, ephemeral=True)
+                    await help_view.wait()
+                    if help_view.help_text is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    if help_view.help_text is False:
+                        input_help_text = ""
+        
+                    input_help_text = help_view.help_text
+        
+                    # === Step G: Create Action-Event ===
+                    action_events_crud.create_action_event(
+                        session,
+                        {
+                            "action_event_key": ae_key,
+                            "action_id": action.id,
+                            "event_id": event.id,
+                            "variant": variant,
+                            "is_allowed_during_visible": is_allowed_during_visible,
+                            "is_self_reportable": is_self_reportable,
+                            "input_help_text": input_help_text,
+                            "reward_event_id": reward_event.id,
+                            "created_by": str(interaction.user.id),
+                            "created_at": iso_now
+                        },
+                        force=force
+                    )
+        
+                    action_key = action.action_key
+        
+                    await interaction.followup.send(
+                        f"{msg_re_success}\n"
+                        f"✅ Linked action **{action_key}** ({variant}) to the reward.",
+                        ephemeral=True
+                    )
 
 
-    # === UNLINK REWARD EVENT ===
+    # ====== UNLINK REWARD EVENT ======
     @admin_or_mod_check()
     @admin_links.command(name="unlink_reward_event")
-    @app_commands.describe(
-        reward_event_key="Shortcode of the reward-event link to remove",
-        reason="Reason for deleting (will be logged)",
-        force="Override restrictions for active events"
-    )
-    async def unlink_reward_event(
-        self,
-        interaction: Interaction,
-        reward_event_key: str,
-        reason: str,
-        force: bool = False
-    ):
+    async def unlink_reward_event(self, interaction: Interaction):
         """Unlink a reward from an event."""
-        await interaction.response.defer(thinking=True, ephemeral=True)
-
+        await interaction.response.defer(ephemeral=True)
+        force = False
+    
         with db_session() as session:
-            reward_event = reward_events_crud.get_reward_event_by_key(session, reward_event_key)
-            if not reward_event:
-                await interaction.followup.send(f"❌ Reward-event link `{reward_event_key}` not found.")
-                return
-
-            # Active event restriction
-            if events_crud.is_event_active(session, reward_event.event_id):
-                if not force:
-                    await interaction.followup.send(
-                        "❌ Cannot unlink a reward-event from an active event without `--force`."
-                    )
-                    return
-                else:
-                    confirmed = await confirm_action(
-                        interaction=interaction,
-                        item_name=f"the reward-event `{reward_event_key}` linked to an ACTIVE event",
-                        item_action="force_delete",
-                        reason="⚠️ **FORCED UNLINK** — this will impact participants!"
-                    )
-                    if not confirmed:
-                        await interaction.followup.send("❌ Forced unlink cancelled or timed out.")
-                        return
-
-            reward_events_crud.delete_reward_event(
-                session, reward_event_key, str(interaction.user.id), reason, force
-            )
-
-            await interaction.followup.send(
-                f"✅ Unlinked reward **{reward_event.reward.reward_name}** "
-                f"(`{reward_event.reward.reward_key}`) from event **{reward_event.event.event_name}** "
-                f"(`{reward_event.event.event_key}`)."
-            )
-
-
-    # ========== ACTION EVENT COMMANDS ==========
+            # Step 1: Select event
+            events = events_crud.get_all_events(session)
+            if not events:
+                return await interaction.followup.send("❌ No events found.", ephemeral=True)
     
-    # === LINK ACTION EVENT ===
-    @admin_or_mod_check()
-    @admin_links.command(name="link_action_event")
-    @app_commands.describe(
-        action_shortcode="Shortcode of the action to link",
-        event_shortcode="Shortcode of the event to link to",
-        input_help_text="Guidance text for input",
-        variant="Optional short label to distinguish this variant (e.g., 'current', 'past')",
-        points_granted="Optional points to grant for this action in this event",
-        reward_event_key="Optional shortcode of linked reward_event",
-        allowed_during_visible="Allow action during event 'visible' status",
-        self_reportable="Can the user report this action themselves?"
-    )
-    async def link_action_event(
-        self,
-        interaction: Interaction,
-        action_shortcode: str,
-        event_shortcode: str,
-        input_help_text: str,
-        variant: str = "default",
-        points_granted: int = 0,
-        reward_event_key: Optional[str] = None,
-        allowed_during_visible: bool = False,
-        self_reportable: bool = True
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+            event_view = SingleSelectView(EventSelect(events))
+            await interaction.followup.send("📌 Select event:", view=event_view, ephemeral=True)
+            await event_view.wait()
     
-        try:
-            with db_session() as session:
-                # --- Validate Event ---
-                event = events_crud.get_event_by_key(session, event_shortcode)
-                if not event:
-                    await interaction.followup.send(f"❌ Event `{event_shortcode}` not found.")
-                    return
-                if events_crud.is_event_active(session, event.id):
-                    await interaction.followup.send("❌ Cannot link actions to an active event.")
-                    return
+            event = events_crud.get_event_by_key(session, event_view.selected_event_key)
+            if not event:
+                return await interaction.followup.send("❌ Invalid event.", ephemeral=True)
     
-                # --- Validate Action ---
-                action = actions_crud.get_action_by_key(session, action_shortcode)
-                if not action:
-                    await interaction.followup.send(f"❌ Action `{action_shortcode}` not found.")
-                    return
+            # Step 2: Active event check
+            if events_crud.is_event_active(session, event.id):
+                confirm_view = ForceConfirmView(f"⚠️ **{event.event_name}** is active. Unlink anyway?")
+                await interaction.followup.send(confirm_view.prompt, view=confirm_view, ephemeral=True)
+                await confirm_view.wait()
+                if not confirm_view.confirmed:
+                    return await interaction.followup.send("❌ Unlink cancelled.", ephemeral=True)
+                force = True
     
-                # --- Validate Reward-Event if provided ---
-                if reward_event_key:
-                    reward_event = reward_events_crud.get_reward_event_by_key(session, reward_event_key)
-                    if not reward_event:
-                        await interaction.followup.send(f"❌ Reward-event `{reward_event_key}` not found.")
-                        return
+            # Step 3: Get linked reward-events
+            reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
     
-                # --- Validate points ---
-                if points_granted < 0:
-                    await interaction.followup.send("❌ Points granted must be 0 or a positive number.")
-                    return
-    
-                # --- Build unique action_event_key ---
-                variant_clean = variant.strip().lower().replace(" ", "_")
-                action_event_key = f"{event_shortcode.lower()}_{action_shortcode.lower()}_{variant_clean}"
-    
-                # --- Check for duplicate link ---
-                existing_ae = action_events_crud.get_action_event_by_key(session, action_event_key)
-                if existing_ae:
-                    await interaction.followup.send(
-                        f"❌ The action **{action.action_key}** is already linked to the event "
-                        f"**{event.event_name}** (`{event.event_key}`) with variant '{variant_clean}'."
-                    )
-                    return
-    
-                # --- Create dict for CRUD ---
-                ae_create_data = {
-                    "action_event_key": action_event_key,
-                    "action_id": action.id,
-                    "event_id": event.id,
-                    "variant": variant_clean,
-                    "points_granted": points_granted,
-                    "reward_event_id": reward_event.id if reward_event_key else None,
-                    "is_allowed_during_visible": allowed_during_visible,
-                    "is_self_reportable": self_reportable,
-                    "input_help_text": input_help_text,
-                    "created_by": str(interaction.user.id)
-                }
-    
-                action_event = action_events_crud.create_action_event(session, ae_create_data)
-    
-                await interaction.followup.send(
-                    f"✅ Linked action **{action.action_key}** (`{action.action_key}`) "
-                    f"to event **{event.event_name}** (`{event.event_key}`) "
-                    f"with the shortcode `{action_event.action_event_key}`."
+            # Early exit if none linked
+            if not reward_events:
+                return await interaction.followup.send(
+                    f"❌ No rewards are linked to **{event.event_name}**.",
+                    ephemeral=True
                 )
     
-        except Exception as e:
-            print(f"❌ DB failure: {e}")
-            await interaction.followup.send("❌ An unexpected error occurred.")
+            # Step 4: Select reward-event to unlink
+            re_view = SingleSelectView(RewardEventSelect(reward_events))
+            await interaction.followup.send("📌 Select reward-event to unlink:", view=re_view, ephemeral=True)
+            await re_view.wait()
     
+            reward_event = reward_events_crud.get_reward_event_by_key(session, re_view.selected_reward_event_key)
+            if not reward_event:
+                return await interaction.followup.send("❌ Invalid reward-event.", ephemeral=True)
     
-    # === EDIT ACTION EVENT ===
+            # Step 5: Delete any associated action-event
+            linked_action_event = session.query(action_events_crud.ActionEvent).filter_by(
+                reward_event_id=reward_event.id
+            ).first()
+
+            iso_now = now_iso()
+
+            msg_ae_deleted = ""
+            if linked_action_event:
+                action_events_crud.delete_action_event(
+                    session,
+                    linked_action_event.action_event_key, 
+                    str(interaction.user.id),
+                    iso_now,
+                    force=force)
+                session.flush()
+                msg_ae_deleted = f"🗑️ Deleted associated action-event: `{linked_action_event.action_event_key}`"
+
+            # Step 6: Unlink reward-event
+            reward_events_crud.delete_reward_event(
+                session,
+                reward_event.reward_event_key,
+                str(interaction.user.id),
+                iso_now,
+                force=force
+            )
+            await interaction.followup.send(
+                f"✅ Unlinked **{reward_event.reward.reward_name}** from **{event.event_name}**.\n{msg_ae_deleted}",
+                ephemeral=True
+            )
+
+
+    # ====== CREATE ACTION EVENT ======
+    @admin_or_mod_check()
+    @admin_links.command(name="create_action_event")
+    async def create_action_event(self, interaction: Interaction):
+        """Create a standalone action-event (not linked to a reward)."""
+        await interaction.response.defer(ephemeral=True)
+        force = False
+        msg_timeout = "❌ Action timed out and cancelled."
+    
+        with db_session() as session:
+            # === Step 1: Select Event ===
+            events = events_crud.get_all_events(session)
+            event_view = SingleSelectView(EventSelect(events))
+            await interaction.followup.send("📌 Select the event:", view=event_view, ephemeral=True)
+            await event_view.wait()
+            if not event_view.selected_event_key:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            event = events_crud.get_event_by_key(session, event_view.selected_event_key)
+            if not event:
+                return await interaction.followup.send("❌ Invalid event.", ephemeral=True)
+    
+            if events_crud.is_event_active(session, event.id):
+                confirm_view = ForceConfirmView(f"⚠️ **{event.event_name}** is active. Create anyway?")
+                await interaction.followup.send(confirm_view.prompt, view=confirm_view, ephemeral=True)
+                await confirm_view.wait()
+                if not confirm_view.confirmed:
+                    return await interaction.followup.send("❌ Cancelled.", ephemeral=True)
+                force = True
+    
+            # === Step 2: Select Action ===
+            active_actions = [a for a in actions_crud.get_all_actions(session) if a.is_active]
+            if not active_actions:
+                return await interaction.followup.send("❌ No active actions found.", ephemeral=True)
+    
+            action_view = SingleSelectView(ActionSelect(active_actions))
+            await interaction.followup.send("📌 Select the action:", view=action_view, ephemeral=True)
+            await action_view.wait()
+            if not action_view.selected_action_key:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            action = actions_crud.get_action_by_key(session, action_view.selected_action_key)
+            if not action:
+                return await interaction.followup.send("❌ Invalid action.", ephemeral=True)
+    
+            # === Step 3: Input Variant ===
+            variant_picker = VariantPickerView()
+            await interaction.followup.send("📌 Enter variant:", view=variant_picker, ephemeral=True)
+            await variant_picker.wait()
+            if not variant_picker.selected_variant:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            variant = variant_picker.selected_variant
+            variant_clean = variant.strip().lower().replace(" ", "_")
+            ae_key = f"{event.event_key.lower()}_{action.action_key.lower()}_{variant_clean}"
+    
+            if action_events_crud.get_action_event_by_key(session, ae_key):
+                return await interaction.followup.send(
+                    f"❌ Action-event `{ae_key}` already exists for this event.",
+                    ephemeral=True
+                )
+    
+            # === Step 4: Select Points Granted ===
+            point_picker = PointPickerView()
+            await interaction.followup.send(
+                "**How many points should this action grant?**\n"
+                "_To link a reward to this action instead, use the command `link_reward_event`._",
+                view=point_picker,
+                ephemeral=True
+            )
+            await point_picker.wait()
+            if point_picker.cancelled:
+                return await interaction.followup.send("❌ Cancelled by user.", ephemeral=True)
+            if point_picker.custom_points is not None:
+                points_granted = point_picker.custom_points
+            elif point_picker.selected_points is not None:
+                points_granted = point_picker.selected_points
+            else:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+    
+            # === Step 5: is_allowed_during_visible ===
+            allowed_view = ToggleYesNoView("Allow during visible period?")
+            await interaction.followup.send(allowed_view.prompt, view=allowed_view, ephemeral=True)
+            await allowed_view.wait()
+            if allowed_view.value is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            is_allowed_during_visible = allowed_view.value
+    
+            # === Step 6: is_self_reportable ===
+            reportable_view = ToggleYesNoView("Allow self-reporting?")
+            await interaction.followup.send(reportable_view.prompt, view=reportable_view, ephemeral=True)
+            await reportable_view.wait()
+            if reportable_view.value is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            is_self_reportable = reportable_view.value
+    
+            # === Step 7: Help Text? ===
+            help_view = HelpTextPickerView()
+            await interaction.followup.send("💬 Add help text?", view=help_view, ephemeral=True)
+            await help_view.wait()
+            if help_view.help_text is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            input_help_text = "" if help_view.help_text is False else help_view.help_text
+    
+            # === Step 8: Create Action-Event ===
+            iso_now = now_iso()
+            ae = action_events_crud.create_action_event(
+                session,
+                {
+                    "action_event_key": ae_key,
+                    "action_id": action.id,
+                    "event_id": event.id,
+                    "variant": variant,
+                    "points_granted": points_granted,
+                    "is_allowed_during_visible": is_allowed_during_visible,
+                    "is_self_reportable": is_self_reportable,
+                    "input_help_text": input_help_text,
+                    "reward_event_id": None,
+                    "created_by": str(interaction.user.id),
+                    "created_at": iso_now
+                },
+                force=force
+            )
+    
+            return await interaction.followup.send(
+                f"✅ Created action-event **{action.action_key}** ({variant}) for event **{event.event_name}** "
+                f"granting **{points_granted}** points.",
+                ephemeral=True
+            )
+
+    
+    # ====== EDIT ACTION EVENT ======
     @admin_or_mod_check()
     @admin_links.command(name="edit_action_event")
-    @app_commands.describe(
-        action_event_key="Shortcode of the action-event link to edit",
-        points_granted="Updated points (optional)",
-        reward_event_key="Updated reward-event link (optional)",
-        allowed_during_visible="Updated allowed-during-visible flag",
-        self_reportable="Updated self-reportable flag",
-        input_help_text="Updated help text (optional)",
-        reason="Reason for editing (will be logged)"
-    )
-    async def edit_action_event(
-        self,
-        interaction: Interaction,
-        action_event_key: str,
-        points_granted: Optional[int] = None,
-        reward_event_key: Optional[str] = None,
-        allowed_during_visible: Optional[bool] = None,
-        self_reportable: Optional[bool] = None,
-        input_help_text: Optional[str] = None,
-        reason: Optional[str] = None
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+    async def edit_action_event(self, interaction: Interaction):
+        """Edit a standalone action-event (not linked to a reward)."""
+        await interaction.response.defer(ephemeral=True)
+        force = False
+        msg_timeout = "❌ Action timed out and cancelled."
     
         with db_session() as session:
-            action_event = action_events_crud.get_action_event_by_key(session, action_event_key)
-            if not action_event:
-                await interaction.followup.send(f"❌ Action-event `{action_event_key}` not found.")
-                return
-            if events_crud.is_event_active(session, action_event.event_id):
-                await interaction.followup.send("❌ Cannot edit actions for an active event.")
-                return
+            # === Step 1: Select Event ===
+            events = events_crud.get_all_events(session)
+            event_view = SingleSelectView(EventSelect(events))
+            await interaction.followup.send("📌 Select the event:", view=event_view, ephemeral=True)
+            await event_view.wait()
+            if not event_view.selected_event_key:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
     
-            re_update_data = {}
+            event = events_crud.get_event_by_key(session, event_view.selected_event_key)
+            if not event:
+                return await interaction.followup.send("❌ Invalid event.", ephemeral=True)
     
-            if points_granted is not None and points_granted != action_event.points_granted:
-                if points_granted < 0:
-                    await interaction.followup.send("❌ Points must be 0 or positive.")
-                    return
-                re_update_data["points_granted"] = points_granted
+            if events_crud.is_event_active(session, event.id):
+                confirm_view = ForceConfirmView(f"⚠️ **{event.event_name}** is active. Edit anyway?")
+                await interaction.followup.send(confirm_view.prompt, view=confirm_view, ephemeral=True)
+                await confirm_view.wait()
+                if not confirm_view.confirmed:
+                    return await interaction.followup.send("❌ Edit cancelled.", ephemeral=True)
+                force = True
     
-            if reward_event_key is not None:
-                reward_event = reward_events_crud.get_reward_event_by_key(session, reward_event_key)
-                if not reward_event:
-                    await interaction.followup.send(f"❌ Reward-event `{reward_event_key}` not found.")
-                    return
-                re_update_data["reward_event_id"] = reward_event.id
+            # === Step 2: Select Standalone ActionEvent ===
+            standalone_aes = session.query(action_events_crud.ActionEvent).filter_by(
+                event_id=event.id, reward_event_id=None
+            ).all()
     
-            if allowed_during_visible is not None:
-                re_update_data["is_allowed_during_visible"] = allowed_during_visible
+            if not standalone_aes:
+                return await interaction.followup.send("❌ No standalone action-events to edit.", ephemeral=True)
     
-            if self_reportable is not None:
-                re_update_data["is_self_reportable"] = self_reportable
+            ae_view = SingleSelectView(ActionEventSelect(standalone_aes))
+            await interaction.followup.send("📌 Select the action-event to edit:", view=ae_view, ephemeral=True)
+            await ae_view.wait()
+            if not ae_view.selected_action_event_key:  
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
     
-            if input_help_text is not None and input_help_text != action_event.input_help_text:
-                re_update_data["input_help_text"] = input_help_text
+            ae = action_events_crud.get_action_event_by_key(session, ae_view.selected_action_event_key)
+            if not ae:
+                return await interaction.followup.send("❌ Invalid action-event.", ephemeral=True)
     
-            if not re_update_data:
-                await interaction.followup.send("❌ No valid fields provided to update.")
-                return
+            # === Step 3: Update Points ===
+            point_picker = PointPickerView()
+            await interaction.followup.send("💠 Choose new point value:", view=point_picker, ephemeral=True)
+            await point_picker.wait()
+            if point_picker.cancelled:
+                return await interaction.followup.send("❌ Cancelled by user.", ephemeral=True)
+            if point_picker.custom_points is not None:
+                points_granted = point_picker.custom_points
+            elif point_picker.selected_points is not None:
+                points_granted = point_picker.selected_points
+            else:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
     
-            re_update_data["modified_by"] = str(interaction.user.id)
+            # === Step 4: is_allowed_during_visible ===
+            allowed_view = ToggleYesNoView("Allow during visible period?")
+            await interaction.followup.send(allowed_view.prompt, view=allowed_view, ephemeral=True)
+            await allowed_view.wait()
+            if allowed_view.value is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            is_allowed_during_visible = allowed_view.value
     
-            action_events_crud.update_action_event(
-                session, action_event_key, re_update_data, reason
+            # === Step 5: is_self_reportable ===
+            reportable_view = ToggleYesNoView("Allow self-reporting?")
+            await interaction.followup.send(reportable_view.prompt, view=reportable_view, ephemeral=True)
+            await reportable_view.wait()
+            if reportable_view.value is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            is_self_reportable = reportable_view.value
+    
+            # === Step 6: Help Text? ===
+            help_view = HelpTextPickerView()
+            await interaction.followup.send("💬 Update help text?", view=help_view, ephemeral=True)
+            await help_view.wait()
+            if help_view.help_text is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            input_help_text = "" if help_view.help_text is False else help_view.help_text
+    
+            # === Step 7: Perform Update ===
+            iso_now = now_iso()
+            updated = action_events_crud.update_action_event(
+                session,
+                ae.action_event_key,
+                {
+                    "points_granted": points_granted,
+                    "is_allowed_during_visible": is_allowed_during_visible,
+                    "is_self_reportable": is_self_reportable,
+                    "input_help_text": input_help_text,
+                    "modified_by": str(interaction.user.id),
+                    "modified_at": iso_now
+                },
+                force=force
             )
     
-            await interaction.followup.send(
-                f"✅ Updated action-event **{action_event.action.action_key}** "
-                f"(`{action_event.action_event_key}`) for event **{action_event.event.event_name}** "
-                f"(`{action_event.event.event_key}`)."
+            if not updated:
+                return await interaction.followup.send("❌ Failed to update action-event.", ephemeral=True)
+    
+            return await interaction.followup.send(
+                f"✅ Updated action-event **{ae.action.action_key}** ({ae.variant}) "
+                f"for event **{event.event_name}**.",
+                ephemeral=True
             )
+
     
-    
-    # === UNLINK ACTION EVENT ===
+    # ====== DELETE ACTION EVENT ======
     @admin_or_mod_check()
-    @admin_links.command(name="unlink_action_event")
-    @app_commands.describe(
-        action_event_key="Shortcode of the action-event link to remove",
-        reason="Reason for deleting (will be logged)"
-    )
-    async def unlink_action_event(
-        self,
-        interaction: Interaction,
-        action_event_key: str,
-        reason: str
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+    @admin_links.command(name="delete_action_event")
+    async def delete_action_event(self, interaction: Interaction):
+        """Delete a standalone action-event (not linked to a reward)."""
+        await interaction.response.defer(ephemeral=True)
+        force = False
+        msg_timeout = "❌ Action timed out and cancelled."
     
         with db_session() as session:
-            action_event = action_events_crud.get_action_event_by_key(session, action_event_key)
-            if not action_event:
-                await interaction.followup.send(f"❌ Action-event `{action_event_key}` not found.")
-                return
-            if events_crud.is_event_active(session, action_event.event_id):
-                await interaction.followup.send("❌ Cannot unlink actions from an active event.")
-                return
+            # === Step 1: Select Event ===
+            events = events_crud.get_all_events(session)
+            event_view = SingleSelectView(EventSelect(events))
+            await interaction.followup.send("📌 Select the event:", view=event_view, ephemeral=True)
+            await event_view.wait()
+            if not event_view.selected_event_key:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
     
-            action_events_crud.delete_action_event(
-                session, action_event_key, str(interaction.user.id), reason
+            event = events_crud.get_event_by_key(session, event_view.selected_event_key)
+            if not event:
+                return await interaction.followup.send("❌ Invalid event.", ephemeral=True)
+    
+            if events_crud.is_event_active(session, event.id):
+                confirm_view = ForceConfirmView(f"⚠️ **{event.event_name}** is active. Delete anyway?")
+                await interaction.followup.send(confirm_view.prompt, view=confirm_view, ephemeral=True)
+                await confirm_view.wait()
+                if not confirm_view.confirmed:
+                    return await interaction.followup.send("❌ Deletion cancelled.", ephemeral=True)
+                force = True
+    
+            # === Step 2: Select Standalone Action-Event ===
+            standalone_aes = session.query(action_events_crud.ActionEvent).filter_by(
+                event_id=event.id,
+                reward_event_id=None
+            ).all()
+    
+            if not standalone_aes:
+                return await interaction.followup.send("❌ No standalone action-events found for this event.", ephemeral=True)
+    
+            ae_view = SingleSelectView(ActionEventSelect(standalone_aes)) 
+            await interaction.followup.send("📌 Select the action-event to delete:", view=ae_view, ephemeral=True)
+            await ae_view.wait()
+            if not ae_view.selected_action_event_key:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+    
+            ae = action_events_crud.get_action_event_by_key(session, ae_view.selected_action_event_key)
+            if not ae:
+                return await interaction.followup.send("❌ Invalid action-event.", ephemeral=True)
+
+            # === Step 3: Perform Deletion ===
+            iso_now = now_iso()
+            success = action_events_crud.delete_action_event(
+                session,
+                ae.action_event_key,
+                str(interaction.user.id),
+                iso_now,
+                force=force
             )
     
-            await interaction.followup.send(
-                f"✅ Unlinked action **{action_event.action.action_key}** "
-                f"(`{action_event.action_event_key}`) from event **{action_event.event.event_name}** "
-                f"(`{action_event.event.event_key}`)."
+            if not success:
+                return await interaction.followup.send("❌ Deletion failed.", ephemeral=True)
+    
+            return await interaction.followup.send(
+                f"🗑️ Deleted action-event **{ae.action.action_key}** ({ae.variant}) from **{event.event_name}**.",
+                ephemeral=True
             )
     
-        
 
-
-
+# ====== SETUP ======
 async def setup(bot):
-    await bot.add_cog(EventLinksAdmin(bot))
+    await bot.add_cog(EventLinksAdminFriendly(bot))
