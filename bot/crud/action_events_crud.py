@@ -1,7 +1,6 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from bot.config import EXCLUDED_LOG_FIELDS
 from bot.crud import general_crud
 from db.schema import ActionEvent, ActionEventLog
 

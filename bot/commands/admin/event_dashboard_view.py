@@ -1,6 +1,6 @@
 import discord
 from discord import Embed
-from bot.utils import format_discord_timestamp
+from bot.utils.time_parse_paginate import format_discord_timestamp
 
 
 # === EVENT INFO BUILDER ===

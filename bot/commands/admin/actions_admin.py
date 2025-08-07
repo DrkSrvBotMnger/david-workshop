@@ -6,7 +6,7 @@ from typing import Optional
 from bot.crud import actions_crud
 from bot.crud.users_crud import action_is_used
 from bot.config import ALLOWED_ACTION_INPUT_FIELDS, ACTIONS_PER_PAGE
-from bot.utils import admin_or_mod_check, paginate_embeds, now_iso
+from bot.utils.time_parse_paginate import admin_or_mod_check, paginate_embeds, now_iso
 from db.database import db_session
 
 

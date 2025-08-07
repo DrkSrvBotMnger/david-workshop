@@ -1,6 +1,6 @@
 from discord import app_commands, Interaction
 from discord.ext import commands
-from bot.utils import admin_or_mod_check, now_iso
+from bot.utils.time_parse_paginate import admin_or_mod_check, now_iso
 from db.database import db_session
 from db.schema import RewardEvent
 from bot.crud import events_crud, rewards_crud, reward_events_crud, actions_crud, action_events_crud

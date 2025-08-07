@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import Optional
-from bot.utils import now_iso
+from bot.utils.time_parse_paginate import now_iso
 from db.schema import Action, ActionEvent, Event, EventStatus
 from bot.crud import general_crud
 

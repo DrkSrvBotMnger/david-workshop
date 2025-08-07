@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from bot.config import EXCLUDED_LOG_FIELDS
 from bot.crud import general_crud
-from bot.utils import now_iso
+from bot.utils.time_parse_paginate import now_iso
 from db.schema import Event, EventLog, EventStatus
 
 
