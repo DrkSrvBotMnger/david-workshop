@@ -4,7 +4,7 @@ from discord.ext import commands
 from typing import Optional
 
 from bot.crud import rewards_crud
-from bot.config import REWARDS_PER_PAGE, LOGS_PER_PAGE, REWARD_PRESET_CHANNEL_ID, REWARD_PRESET_ARCHIVE_CHANNEL_ID, EMOJI_REGEX, BADGE_TYPES, STACKABLE_TYPES, PUBLISHABLE_REWARD_TYPES
+from bot.config import REWARDS_PER_PAGE, LOGS_PER_PAGE, REWARD_PRESET_CHANNEL_ID, REWARD_PRESET_ARCHIVE_CHANNEL_ID, CUSTOM_DISCORD_EMOJI, UNICODE_EMOJI, BADGE_TYPES, STACKABLE_TYPES, PUBLISHABLE_REWARD_TYPES
 from bot.utils.time_parse_paginate import admin_or_mod_check, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, now_unix, parse_message_link
 from db.database import db_session
 
@@ -48,7 +48,8 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
         if not value:
             return False
         else:
-            return bool(EMOJI_REGEX.match(value))
+            return bool(CUSTOM_DISCORD_EMOJI.match(value) or UNICODE_EMOJI.match(value))
+            
 
     
     # === CREATE REWARD ===

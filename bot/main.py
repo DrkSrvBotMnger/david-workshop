@@ -21,8 +21,8 @@ class MyBot(commands.Bot):
                 print(f"❌ Failed to load {cog}: {e}")
 
         try:
-            await self.load_extension("bot.commands.user_profile")
-            print(f"✅ Loaded bot.commands.user_profile")
+            await self.load_extension("bot.commands.user.user_profile")
+            print("✅ Loaded bot.commands.user.user_profile")
         except Exception as e:
             print(f"❌ Failed to load bot.commands.user_profile: {e}")
 

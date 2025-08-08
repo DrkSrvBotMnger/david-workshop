@@ -1,5 +1,7 @@
 import os
 import re
+import regex
+
 
 ENV = os.getenv("ENV", "dev").lower()
 
@@ -65,3 +67,21 @@ STACKABLE_TYPES = ("preset", "dynamic",)
 PUBLISHABLE_REWARD_TYPES = ("preset", "dynamic",)
 
 EXCLUDED_LOG_FIELDS = {"created_by", "created_at", "modified_by", "modified_at", "preset_by", "preset_at"}
+
+
+
+# ✅ Custom Discord emoji: <:name:id> or <a:name:id>
+# name: 2–32 chars, letters/numbers/underscore; id: discord snowflake (17–20 digits)
+CUSTOM_DISCORD_EMOJI = regex.compile(
+    r"^<a?:[A-Za-z0-9_]{2,32}:\d{17,20}>$"
+)
+
+# ✅ Unicode emoji (single grapheme, supports ZWJ sequences + optional VS)
+# Covers most modern emoji via Extended_Pictographic.
+UNICODE_EMOJI = regex.compile(
+    r"^(?:\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?"
+    r"(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?)*"
+    r"|\d\uFE0F\u20E3|[#*]\uFE0F\u20E3)$",
+    flags=regex.VERSION1,
+)
+

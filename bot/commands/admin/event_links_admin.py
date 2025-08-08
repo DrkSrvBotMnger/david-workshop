@@ -5,7 +5,7 @@ from db.database import db_session
 from db.schema import RewardEvent
 from bot.crud import events_crud, rewards_crud, reward_events_crud, actions_crud, action_events_crud
 
-from .event_link_views import (
+from bot.ui.admin.event_link_views import (
     EventSelect, RewardSelect, RewardEventSelect, AvailabilitySelect, PricePicker, ForceConfirmView, ActionEventSelect,
     ActionSelect, VariantPickerView, HelpTextPickerView, YesNoView, ToggleYesNoView,
     SingleSelectView, PointPickerView

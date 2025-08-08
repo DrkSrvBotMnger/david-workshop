@@ -9,7 +9,7 @@ from bot.config import EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_
 from bot.utils.time_parse_paginate import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, parse_message_link, post_announcement_message
 from db.database import db_session
 from db.schema import EventLog, EventStatus
-from .event_dashboard_view import EventDashboardView, build_event_embed
+from bot.ui.admin.event_dashboard_view import EventDashboardView, build_event_embed
 
 
 class AdminEventCommands(commands.GroupCog, name="admin_event"):

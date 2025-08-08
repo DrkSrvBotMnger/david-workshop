@@ -2,7 +2,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 from bot.crud import general_crud
-from bot.utils import now_iso
+from bot.utils.time_parse_paginate import now_iso
 from db.schema import User, UserAction
 
 
@@ -16,32 +16,24 @@ def get_user_by_discord_id(
     return session.query(User).filter_by(user_discord_id=user_discord_id).first()
 
 
-# --- CREATE OR GET ---
-def get_or_create_user(
-    session: Session, 
-    user_discord_id: str,
-    user_create_data: Optional[dict] = None,
-) -> User:
-    """
-    Retrieve or create a new user and log the action.
-    """
-    
-    user = get_user_by_discord_id(
-        session=session,
-        user_discord_id=user_discord_id
-    )
+# --- CREATE ---
+def get_or_create_user(session, discord_id: str, user_data: dict) -> User:
+    user = session.query(User).filter_by(user_discord_id=discord_id).first()
+    print(f"✅ User fetched: {user}")
+    if user:
 
-    if not user:
+        for key, value in user_data.items():
+            setattr(user, key, value)
 
-        iso_now=now_iso()
-        
-        user = User(
-            user_discord_id=user_discord_id,
-            created_at=iso_now,
-            **(user_create_data or {})
-        )
-        session.add(user)
-        
+        user.modified_at=now_iso()
+        print(f"✅ User updated: {user}")
+        session.flush()
+        return user
+
+    user = User(**user_data, user_discord_id=discord_id, created_at=now_iso())    
+    session.add(user)
+    print(f"✅ User created: {user}")
+    session.flush()
     return user
 
 
