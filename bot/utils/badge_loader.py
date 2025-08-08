@@ -1,4 +1,3 @@
-# badge_loader.py
 import re
 import aiohttp
 import io

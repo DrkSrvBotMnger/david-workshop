@@ -38,18 +38,8 @@ class UserProfile(commands.Cog):
         with db_session() as session:
             if member is None:
                 member = interaction.user
-            
-            user_data={
-                "username": member.name,
-                "display_name": member.global_name,
-                "nickname": member.nick
-            }
-            
-            user = users_crud.get_or_create_user(
-                session=session,
-                discord_id=str(member.id),
-                user_data=user_data
-            )
+                        
+            user = users_crud.get_or_create_user(session,member)
 
             user_discord_id = user.user_discord_id
             if user.nickname:

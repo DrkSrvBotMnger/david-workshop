@@ -4,7 +4,8 @@ from typing import Optional
 from bot.crud import general_crud
 from bot.utils.time_parse_paginate import now_iso
 from db.schema import User, UserAction
-
+import discord
+from discord import app_commands, File, Interaction, Embed, User as DiscordUser, SelectOption
 
 # --- GET ---
 def get_user_by_discord_id(
@@ -17,22 +18,31 @@ def get_user_by_discord_id(
 
 
 # --- CREATE ---
-def get_or_create_user(session, discord_id: str, user_data: dict) -> User:
-    user = session.query(User).filter_by(user_discord_id=discord_id).first()
-    print(f"✅ User fetched: {user}")
+def get_or_create_user(session, member: discord.Member) -> User:
+
+    discord_id=str(member.id)
+    user = get_user_by_discord_id(session, discord_id)
     if user:
 
+        user_data={
+            "username": member.name,
+            "display_name": member.global_name,
+            "nickname": member.nick
+        }
         for key, value in user_data.items():
             setattr(user, key, value)
 
         user.modified_at=now_iso()
-        print(f"✅ User updated: {user}")
         session.flush()
         return user
 
+    user_data={
+        "username": member.name,
+        "display_name": member.global_name,
+        "nickname": member.nick
+    }
     user = User(**user_data, user_discord_id=discord_id, created_at=now_iso())    
     session.add(user)
-    print(f"✅ User created: {user}")
     session.flush()
     return user
 

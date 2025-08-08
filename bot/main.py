@@ -20,11 +20,16 @@ class MyBot(commands.Bot):
             except Exception as e:
                 print(f"❌ Failed to load {cog}: {e}")
 
-        try:
-            await self.load_extension("bot.commands.user.user_profile")
-            print("✅ Loaded bot.commands.user.user_profile")
-        except Exception as e:
-            print(f"❌ Failed to load bot.commands.user_profile: {e}")
+        user_cogs = [
+            "bot.commands.user.shop",
+            "bot.commands.user.profile",
+        ]    
+        for cog in user_cogs:
+            try:
+                await self.load_extension(cog)
+                print(f"✅ Loaded {cog}")
+            except Exception as e:
+                print(f"❌ Failed to load {cog}: {e}")
 
 # Bot setup
 intents = discord.Intents.default()

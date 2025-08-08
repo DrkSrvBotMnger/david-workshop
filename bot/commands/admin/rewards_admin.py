@@ -98,7 +98,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
             if rewards_crud.get_reward_by_key(
                 session=session, 
                 reward_key=shortcode
-            ):
+            ): 
                 await interaction.followup.send(f"❌ Reward `{reward_key}` already exists.")
                 return
 
@@ -490,7 +490,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                 session=session, 
                 reward_key=reward_key
             ):
-                if reward.use_message_id and not force:
+                if reward.use_message_discord_id and not force:
                     await interaction.followup.send(
                         "❌ Cannot re-publish a preset for a reward linked to an active event without `--force`."
                     )
