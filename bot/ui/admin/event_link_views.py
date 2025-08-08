@@ -65,7 +65,7 @@ class HelpTextModal(discord.ui.Modal, title="User Help Text"):
 # ====== PRICE PICKER VIEW ======
 class PricePicker(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=10)
+        super().__init__(timeout=30)
         self.selected_price = None
 
     @discord.ui.button(label="0", style=discord.ButtonStyle.secondary)
@@ -105,7 +105,7 @@ class PricePicker(discord.ui.View):
 # ====== CUSTOM VARIANT BUTTON VIEW ======
 class CustomVariantButtonView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=10)
+        super().__init__(timeout=30)
         self.variant = None
 
     @discord.ui.button(label="✏️ Enter Custom Variant", style=discord.ButtonStyle.primary)
@@ -122,7 +122,7 @@ class CustomVariantButtonView(discord.ui.View):
 # ====== LAUNCH MODAL BUTTON VIEW ======
 class VariantPickerView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=10)
+        super().__init__(timeout=30)
         self.selected_variant = None
 
     @discord.ui.button(label="Default", style=discord.ButtonStyle.secondary)
@@ -157,7 +157,7 @@ class VariantPickerView(discord.ui.View):
 # ====== FORCE CONFIRM VIEW ======
 class ForceConfirmView(discord.ui.View):
     def __init__(self, prompt: str):
-        super().__init__(timeout=10)
+        super().__init__(timeout=30)
         self.prompt = prompt
         self.confirmed = False
 
@@ -177,7 +177,7 @@ class ForceConfirmView(discord.ui.View):
 # ====== YES/NO VIEW ======
 class YesNoView(discord.ui.View):
     def __init__(self, prompt: str):
-        super().__init__(timeout=10)
+        super().__init__(timeout=30)
         self.prompt = prompt
         self.confirmed = None
 
@@ -197,7 +197,7 @@ class YesNoView(discord.ui.View):
 # ====== HELP TEXT PICKER VIEW ======
 class HelpTextPickerView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=10)
+        super().__init__(timeout=60)
         self.help_text = None
 
     @discord.ui.button(label="✅ Yes", style=discord.ButtonStyle.success)
@@ -220,7 +220,7 @@ class HelpTextPickerView(discord.ui.View):
 # ====== TOGGLE YES/NO VIEW ======
 class ToggleYesNoView(discord.ui.View):
     def __init__(self, prompt: str):
-        super().__init__(timeout=10)
+        super().__init__(timeout=30)
         self.prompt = prompt
         self.value = None
 
@@ -332,7 +332,7 @@ class ActionSelect(discord.ui.Select):
 
 
 class ActionSelectView(discord.ui.View):
-    def __init__(self, actions, timeout=10):
+    def __init__(self, actions, timeout=30):
         super().__init__(timeout=timeout)
         self.selected_action_key = None
         self.add_item(ActionSelect(actions))
@@ -341,7 +341,7 @@ class ActionSelectView(discord.ui.View):
 
 class PointPickerView(View):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=30)
         self.selected_points = None
         self.custom_points = None
         self.cancelled = False
@@ -381,7 +381,7 @@ class PointPickerView(View):
 
 class CustomPointsModal(Modal, title="Custom Points"):
     def __init__(self):
-        super().__init__(timeout=60)
+        super().__init__(timeout=30)
         self.custom_points = None
 
         self.points_input = TextInput(

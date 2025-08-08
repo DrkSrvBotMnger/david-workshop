@@ -23,6 +23,8 @@ class MyBot(commands.Bot):
         user_cogs = [
             "bot.commands.user.shop",
             "bot.commands.user.profile",
+            "bot.commands.user.use",
+            "bot.commands.user.report_action"
         ]    
         for cog in user_cogs:
             try:

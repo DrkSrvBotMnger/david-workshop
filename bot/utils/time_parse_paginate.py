@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from discord import Interaction, ui, Message
 from discord.ui import View, Button
 from typing import Optional
-from bot.config import MOD_ROLE_IDS
+from bot.config import MOD_ROLE_IDS, SUPPORTED_FIELDS
 
 
 # ISO 8601 format with timezone offset
@@ -50,6 +50,23 @@ def format_discord_timestamp(
         return f"<t:{unix_ts}:{style}>"
     except Exception:
         return iso_str
+
+
+# Supported fields for Action definitions
+def parse_required_fields(input_fields_json: str | None) -> list[str]:
+    """Return ordered list of required fields (subset of SUPPORTED_FIELDS)."""
+    if not input_fields_json:
+        return []
+    try:
+        fields = json.loads(input_fields_json)
+    except Exception:
+        return []
+    out = []
+    for f in fields:
+        f = str(f).strip().lower()
+        if f in SUPPORTED_FIELDS and f not in out:
+            out.append(f)
+    return out
 
         
 # Parse Discord message links into channel_id and message_id

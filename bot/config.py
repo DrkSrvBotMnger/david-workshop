@@ -47,6 +47,7 @@ ALLOWED_ACTION_INPUT_FIELDS = [
     "boolean_value",
     "date_value"
 ]
+SUPPORTED_FIELDS = {"url", "numeric_value", "text_value", "boolean_value", "date_value"}
 
 # Pagination settings
 ACTIONS_PER_PAGE = 5           # Admin action listing
