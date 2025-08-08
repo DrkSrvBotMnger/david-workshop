@@ -38,7 +38,7 @@ async def extract_badge_icons(emojis: List[str], session: aiohttp.ClientSession)
 
             # Unicode emoji → Twemoji PNG
             code = emoji_to_codepoint(emoji)
-            path = f"bot/assets/twemoji/{code}.png"
+            path = f"assets/twemoji/{code}.png"
             try:
                 icons.append(Image.open(path).convert("RGBA"))
             except FileNotFoundError:
