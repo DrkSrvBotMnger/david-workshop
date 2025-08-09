@@ -1,16 +1,9 @@
-import re
 import aiohttp
 import io
 from PIL import Image
 from typing import List, Union
-from bot.config import CUSTOM_DISCORD_EMOJI
+from bot.utils.emoji import is_custom_emoji, emoji_to_codepoint
 
-def is_custom_emoji(s: str) -> bool:
-    return bool(s and CUSTOM_DISCORD_EMOJI.match(s))
-
-def emoji_to_codepoint(emoji: str) -> str:
-    """Convert a Unicode emoji into Twemoji codepoint format."""
-    return "-".join(f"{ord(c):X}" for c in emoji).lower()
 
 async def extract_badge_icons(emojis: List[str], session: aiohttp.ClientSession) -> List[Union[Image.Image, str]]:
     """

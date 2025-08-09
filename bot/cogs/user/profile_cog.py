@@ -1,106 +1,94 @@
 import discord
-from discord import app_commands, File, Interaction, Embed, User as DiscordUser, SelectOption
-from typing import Optional, List, Union
+from discord import app_commands, File, Interaction, SelectOption
+from typing import Optional
 from discord.ext import commands
-from bot.crud import events_crud, users_crud
+
 from db.database import db_session
 from db.schema import EventStatus, Inventory, Reward, User, Event
-from bot.config import TICKET_CHANNEL_ID
-from bot.utils.profile_card import generate_profile_card  # path depends on your structure
-from bot.utils.badge_loader import extract_badge_icons
-from bot.utils.time_parse_paginate import now_iso
-from bot.ui.user.event_button import EventButtons, EventSelectView
+
+# UI
+from bot.ui.user.profile_views import ProfileView
+from bot.ui.user.inventory_views import InventoryView
+from bot.ui.user.event_button import EventSelectView
 from bot.ui.user.equip_badge_view import EquipBadgeView
 from bot.ui.user.equip_title_view import EquipTitleView
-import aiohttp
-import io
-from PIL import Image, ImageDraw, ImageFont, ImageOps
-import re
-from discord.ui import View, Select, Button
+
+# Services (helpers moved out of the cog)
+from bot.services.profile_service import fetch_profile_vm, build_profile_file_and_name
+from bot.services.inventory_service import fetch_inventory_for_member
 
 
-
-class UserProfile(commands.Cog):
+class ProfileCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    
-    # === PROFILE COMMAND === 
+    # ---------------- internal callbacks ----------------
+
+    async def _open_inventory(self, inter: Interaction, target: discord.Member | discord.User):
+        """
+        Component callback: replace the current message with the user's inventory.
+        View remains DB-free; we fetch everything here (via service).
+        """
+        user_row, items, display_name = fetch_inventory_for_member(target)
+
+        async def _back_to_profile(cb_inter: Interaction):
+            # Re-render profile on the SAME message
+            vm = fetch_profile_vm(target)
+            file, _ = await build_profile_file_and_name(vm)
+            view = ProfileView(on_open_inventory=lambda i: self._open_inventory(i, target))
+            await cb_inter.response.edit_message(attachments=[file], view=view, embed=None)
+
+        inv_view = InventoryView(
+            viewer=target,
+            items=items,
+            on_back_to_profile=_back_to_profile,
+            display_name=display_name,  # pass the resolved name
+        )
+        await inter.response.edit_message(embed=inv_view.build_embed(), view=inv_view, attachments=[])
+
+    # ---------------- slash commands ----------------
+
     @app_commands.command(name="profile", description="Show your current points and rewards.")
-    async def profile(
-        self, 
-        interaction: Interaction, 
-        member: Optional[discord.Member] = None,
-    ):
+    async def profile(self, interaction: Interaction, member: Optional[discord.Member] = None):
+        """
+        Sends the profile card image + an 'Open Inventory' button.
+        """
         await interaction.response.defer(ephemeral=False)
-                
-        with db_session() as session:
-            if member is None:
-                member = interaction.user
-                        
-            user = users_crud.get_or_create_user(session,member)
-
-            user_discord_id = user.user_discord_id
-            if user.nickname:
-                display_name = user.nickname
-            elif user.display_name:
-                display_name = user.display_name
-            elif user.username:
-                display_name = user.username
-                    
-            points = user.points
-            total_earned = user.total_earned
-            
-            title = (
-                session.query(Inventory)
-                .join(Reward)
-                .filter(
-                    Inventory.user_id == user.id,
-                    Inventory.is_equipped,
-                    Reward.reward_type == "title"
-                ).first()
-            )
-            title_text = title.reward.reward_name if title else None
-            
-            rows = (
-                session.query(Reward.emoji)
-                .join(Inventory, Inventory.reward_id == Reward.id)
-                .filter(
-                    Inventory.user_id == user.id,
-                    Inventory.is_equipped,
-                    Reward.reward_type == "badge",
-                ).all()
-            )
-            badge_emojis = [str(emoji) for (emoji,) in rows if emoji]
-        
-        async with aiohttp.ClientSession() as session_http:
-            
-            badge_icons = await extract_badge_icons(badge_emojis, session=session_http)
-            
-            avatar_url = member.display_avatar.url
-            
-            async with session_http.get(avatar_url) as resp:
-                avatar_bytes = await resp.read()
-        
+        target = member or interaction.user
         try:
-            image_buffer = generate_profile_card(
-                avatar_bytes,
-                display_name,    
-                points,
-                total_earned,
-                title_text,
-                badge_icons
-            )
-            
-            # === Send to user ===
-            file = File(fp=image_buffer, filename="profile.png")
-            await interaction.followup.send(file=file, ephemeral=False)
-
+            vm = fetch_profile_vm(target)
+            file, _display_name = await build_profile_file_and_name(vm)
+            view = ProfileView(on_open_inventory=lambda i: self._open_inventory(i, target))
+            await interaction.followup.send(file=file, view=view, ephemeral=False)
         except Exception as e:
-            print("❌ Error in profile card generation:", e)
+            print("❌ Error generating profile card:", e)
             await interaction.followup.send("❌ Something went wrong generating your profile card.", ephemeral=True)
-        return
- 
+
+    @app_commands.command(name="inventory", description="Show your (or another member's) inventory")
+    @app_commands.describe(member="Whose inventory to view (optional)")
+    async def inventory(self, interaction: Interaction, member: discord.Member | None = None):
+        """
+        Standalone inventory command. Also offers a Back-to-Profile button.
+        """
+        target = member or interaction.user
+        user_row, items, display_name = fetch_inventory_for_member(target)
+
+        async def _back(cb_inter: Interaction):
+            vm = fetch_profile_vm(target)
+            file, _ = await build_profile_file_and_name(vm)
+            view = ProfileView(on_open_inventory=lambda i: self._open_inventory(i, target))
+            await cb_inter.response.edit_message(attachments=[file], view=view, embed=None)
+
+        view = InventoryView(
+            viewer=target,
+            items=items,
+            on_back_to_profile=_back,
+            display_name=display_name,  # ensure the view never guesses names
+        )
+        await interaction.response.send_message(embed=view.build_embed(), view=view, ephemeral=True)
+
+
+
     
     # === VIEW EVENT COMMAND ===
     @app_commands.command(name="event", description="Browse current events.")
@@ -135,7 +123,7 @@ class UserProfile(commands.Cog):
 
 
     # === EQUIP BADGE COMMAND ===
-    @app_commands.command(name="equip_badge", description="Select up to 8 badges to display on your profile.")
+    @app_commands.command(name="equip_badge", description="Select up to 12 badges to display on your profile.")
     async def equip_badge(self, interaction: Interaction):
         
         with db_session() as session:
@@ -207,4 +195,4 @@ class UserProfile(commands.Cog):
 
 # === COG SETUP ===
 async def setup(bot):
-    await bot.add_cog(UserProfile(bot))
+    await bot.add_cog(ProfileCog(bot))

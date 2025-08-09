@@ -23,9 +23,9 @@ class MyBot(commands.Bot):
 
         user_cogs = [
             "bot.commands.user.shop",
-            "bot.commands.user.profile",
+            "bot.cogs.user.profile_cog",
             "bot.commands.user.use",
-            "bot.commands.user.report_action"
+            "bot.commands.user.report_action",
         ]    
         for cog in user_cogs:
             try:
