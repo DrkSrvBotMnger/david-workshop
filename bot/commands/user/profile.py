@@ -4,12 +4,12 @@ from typing import Optional, List, Union
 from discord.ext import commands
 from bot.crud import events_crud, users_crud
 from db.database import db_session
-from db.schema import EventStatus, Inventory, Reward, User
+from db.schema import EventStatus, Inventory, Reward, User, Event
 from bot.config import TICKET_CHANNEL_ID
 from bot.utils.profile_card import generate_profile_card  # path depends on your structure
 from bot.utils.badge_loader import extract_badge_icons
 from bot.utils.time_parse_paginate import now_iso
-from bot.ui.user.event_button import EventButtons
+from bot.ui.user.event_button import EventButtons, EventSelectView
 from bot.ui.user.equip_badge_view import EquipBadgeView
 from bot.ui.user.equip_title_view import EquipTitleView
 import aiohttp
@@ -25,8 +25,7 @@ class UserProfile(commands.Cog):
         self.bot = bot
 
     
-    # === PROFILE COMMAND ===
-    
+    # === PROFILE COMMAND === 
     @app_commands.command(name="profile", description="Show your current points and rewards.")
     async def profile(
         self, 
@@ -101,62 +100,38 @@ class UserProfile(commands.Cog):
             print("❌ Error in profile card generation:", e)
             await interaction.followup.send("❌ Something went wrong generating your profile card.", ephemeral=True)
         return
-
+ 
     
     # === VIEW EVENT COMMAND ===
-    @app_commands.describe(shortcode="Shortcode of the event to view")
-    @app_commands.command(name="event", description="View details for a visible event.")
-    async def view_event(
-        self,
-        interaction: discord.Interaction,
-        shortcode: str
-    ):
+    @app_commands.command(name="event", description="Browse current events.")
+    async def view_event(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True, ephemeral=True)
-    
+
         with db_session() as session:
-            event = events_crud.get_event_by_key(session, shortcode)
-            if not event:
-                await interaction.followup.send(f"❌ Event `{shortcode}` not found.", ephemeral=True)
+            # Only visible/active events that have a saved original message
+            rows = (
+                session.query(Event)
+                .filter(Event.event_status.in_([EventStatus.visible, EventStatus.active]))
+                .filter(Event.embed_channel_discord_id.isnot(None))
+                .filter(Event.embed_message_discord_id.isnot(None))
+                .order_by(Event.priority.desc(), Event.start_date.asc(), Event.event_name.asc())
+                .all()
+            )
+
+            if not rows:
+                await interaction.followup.send("There are no events to show right now.", ephemeral=True)
                 return
-    
-            if event.event_status == EventStatus.draft:
-                await interaction.followup.send(f"⚠️ Event `{shortcode}` is not currently visible.", ephemeral=True)
-                return
-    
-            if not event.embed_message_discord_id:
-                await interaction.followup.send(
-                    f"❌ Event `{shortcode}` is visible but no embed message is set.",
-                    ephemeral=True
-                )
-                return
-    
-            try:
-                channel = interaction.guild.get_channel(int(event.embed_channel_discord_id))
-                if not channel:
-                    raise ValueError("Channel not found")
-    
-                message = await channel.fetch_message(int(event.embed_message_discord_id))
-                if not message.embeds:
-                    raise ValueError("No embeds in stored message")
-    
-                # Build buttons with correct guild-specific ticket link
-                view = EventButtons(event.event_key, event.event_name)
-                for child in view.children:
-                    if isinstance(child, discord.ui.Button) and child.style == discord.ButtonStyle.link:
-                        child.url = f"https://discord.com/channels/{interaction.guild.id}/{TICKET_CHANNEL_ID}"
-    
-                # Send all embeds + buttons (ephemeral for spam control)
-                await interaction.followup.send(
-                    embeds=message.embeds,
-                    view=view
-                )
-    
-            except Exception as e:
-                print(f"⚠️ Failed to fetch event embed for {shortcode}: {e}")
-                await interaction.followup.send(
-                    f"❌ Could not retrieve the embed for `{shortcode}`. Please contact a moderator.",
-                    ephemeral=True
-                )
+
+            options: list[dict] = []
+            for ev in rows[:25]:  # Discord limit
+                options.append({
+                    "label": ev.event_name,
+                    "value": ev.event_key,                 # internal id for callback
+                    "description": ev.event_type or "Event"
+                })
+
+        view = EventSelectView(options)
+        await interaction.followup.send("Select an event to view:", view=view, ephemeral=True)
 
 
     # === EQUIP BADGE COMMAND ===

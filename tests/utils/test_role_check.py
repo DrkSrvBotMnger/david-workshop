@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from bot.utils import is_admin_or_mod, MOD_ROLE_IDS
+from bot.utils.time_parse_paginate import is_admin_or_mod, MOD_ROLE_IDS
 
 
 @pytest.mark.utils

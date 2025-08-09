@@ -5,7 +5,7 @@ import regex
 
 ENV = os.getenv("ENV", "dev").lower()
 
-# Development config (Replit)
+# Development config / Test unitaire config (Replit) 
 DEV_CONFIG = {
     "MOD_ROLE_IDS": [
         1386917677389582427, 849835131182383145, 930538612754382869, 942193816880963694, 1393027937569341522
@@ -15,6 +15,18 @@ DEV_CONFIG = {
     "TICKET_CHANNEL_ID" : 1231672338010083430,
     "REWARD_PRESET_CHANNEL_ID": 1400290947861839912,
     "REWARD_PRESET_ARCHIVE_CHANNEL_ID": 1400290999351377980
+}
+
+# QA config (Railway)
+TEST_CONFIG = {
+    "MOD_ROLE_IDS": [
+        1392541137415311410
+    ],
+    "EMBED_CHANNEL_ID": 1403469932955697202,
+    "EVENT_ANNOUNCEMENT_CHANNEL_ID": 1403469849690116137,
+    "TICKET_CHANNEL_ID" : 1392530165770227884,
+    "REWARD_PRESET_CHANNEL_ID": 1403470024819085402,
+    "REWARD_PRESET_ARCHIVE_CHANNEL_ID": 1403470095682109500
 }
 
 # Production config (Railway)
@@ -29,8 +41,13 @@ PROD_CONFIG = {
     "REWARD_PRESET_ARCHIVE_CHANNEL_ID": 1135642815687303260
 }
 
-CONFIG = DEV_CONFIG if ENV == "dev" else PROD_CONFIG
-
+if ENV == "dev" or "tu":
+    CONFIG = DEV_CONFIG
+elif ENV == "test":
+    CONFIG = TEST_CONFIG
+else:
+    CONFIG = PROD_CONFIG
+    
 # Easy access in other files:
 MOD_ROLE_IDS = CONFIG["MOD_ROLE_IDS"]
 EMBED_CHANNEL_ID = CONFIG["EMBED_CHANNEL_ID"]
@@ -55,12 +72,6 @@ EVENTS_PER_PAGE = 5            # Event listing
 REWARDS_PER_PAGE = 5           # Shop reward listing
 LOGS_PER_PAGE = 5              # Event/user logs
 
-# Matches standard Unicode emoji OR Discord custom emoji format
-EMOJI_REGEX = re.compile(
-    r"^<a?:\w+:\d+>$"  # Discord custom emoji
-    r"|"
-    r"^[\U0001F300-\U0001FAD6\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\U0001F900-\U0001F9FF\U0001FA70-\U0001FAFF]$"  # Unicode emoji
-)
 
 # Reward types to set mandatory fields
 BADGE_TYPES = ("badge",)
@@ -85,4 +96,3 @@ UNICODE_EMOJI = regex.compile(
     r"|\d\uFE0F\u20E3|[#*]\uFE0F\u20E3)$",
     flags=regex.VERSION1,
 )
-

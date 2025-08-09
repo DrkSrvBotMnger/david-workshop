@@ -11,7 +11,7 @@ from db.schema import (
     User, Event, Action, ActionEvent, RewardEvent, Reward, Inventory, UserAction, UserEventData
 )
 from bot.crud import users_crud
-from bot.utils.time_parse_paginate import now_iso, parse_required_fields
+from bot.utils.time_parse_paginate import now_iso, parse_required_fields, parse_help_texts
 
 
 # -----------------------------
@@ -47,21 +47,22 @@ def get_self_reportable_action_events(session):
 # -----------------------------
 
 class DynamicReportModal(discord.ui.Modal, title="Report action"):
-    def __init__(self, action_event_id: int, fields: list[str], help_text: str | None = None):
+    def __init__(self, action_event_id: int, fields: list[str], help_map: dict[str, str] | None = None):
         super().__init__(timeout=180)
         self.action_event_id = action_event_id
         self.fields = fields
-        self.help_text = (help_text or "").strip()
-
-        # Optional: show help as first line of modal title? (Discord title is short, so we keep it simple.)
-        # Instead, we put the guidance in labels/placeholders below.
-
+        self.help_map = help_map or {}
         self.inputs: dict[str, discord.ui.TextInput] = {}
+
+        # Helper to pick a placeholder: field-specific help if any, else a sane default
+        def ph(field: str, default: str) -> str:
+            txt = self.help_map.get(field, "").strip()
+            return txt if txt else default
 
         if "url" in fields:
             ti = discord.ui.TextInput(
                 label="Link (URL)",
-                placeholder="https://…",
+                placeholder=ph("url", "https://…"),
                 style=discord.TextStyle.short,
                 required=True
             )
@@ -71,7 +72,7 @@ class DynamicReportModal(discord.ui.Modal, title="Report action"):
         if "numeric_value" in fields:
             ti = discord.ui.TextInput(
                 label="Number",
-                placeholder="e.g., 5",
+                placeholder=ph("numeric_value", "e.g., 5"),
                 style=discord.TextStyle.short,
                 required=True
             )
@@ -81,7 +82,7 @@ class DynamicReportModal(discord.ui.Modal, title="Report action"):
         if "text_value" in fields:
             ti = discord.ui.TextInput(
                 label="Notes / details",
-                placeholder="Add any relevant details…",
+                placeholder=ph("text_value", "Add any relevant details…"),
                 style=discord.TextStyle.paragraph,
                 required=True
             )
@@ -91,7 +92,7 @@ class DynamicReportModal(discord.ui.Modal, title="Report action"):
         if "boolean_value" in fields:
             ti = discord.ui.TextInput(
                 label="Yes / No",
-                placeholder="yes or no",
+                placeholder=ph("boolean_value", "yes or no"),
                 style=discord.TextStyle.short,
                 required=True
             )
@@ -101,12 +102,13 @@ class DynamicReportModal(discord.ui.Modal, title="Report action"):
         if "date_value" in fields:
             ti = discord.ui.TextInput(
                 label="Date",
-                placeholder="YYYY-MM-DD",
+                placeholder=ph("date_value", "YYYY-MM-DD"),
                 style=discord.TextStyle.short,
                 required=True
             )
             self.inputs["date_value"] = ti
             self.add_item(ti)
+
 
     async def on_submit(self, interaction: Interaction):
         # Validate & normalize
@@ -180,9 +182,9 @@ class ActionEventSelect(discord.ui.Select):
         Each item in options_data must contain:
           - value: str(ActionEvent.id)
           - label: str (<=100)
-          - description: str (<=100)
-          - fields: list[str] (any of SUPPORTED_FIELDS)
-          - help: str
+          - description: str (<=100)  # uses general help
+          - fields: list[str]
+          - help_map: dict[str, str]  # includes 'general' and per-field helps
         """
         opts = [
             discord.SelectOption(
@@ -205,19 +207,17 @@ class ActionEventSelect(discord.ui.Select):
         payload = self._payload[self.values[0]]
         action_event_id = int(payload["value"])
         fields = payload.get("fields", [])
-        help_text = payload.get("help") or ""
-
+        help_map = payload.get("help_map", {})  # <— dict
+    
         if not fields:
-            # No inputs required; record immediately
             await handle_action_submission(
                 interaction,
                 action_event_id,
                 url=None, numeric=None, text=None, boolean=None, date=None
             )
             return
-
-        # Build and show dynamic modal
-        modal = DynamicReportModal(action_event_id, fields, help_text)
+    
+        modal = DynamicReportModal(action_event_id, fields, help_map)
         await interaction.response.send_modal(modal)
 
 
@@ -248,8 +248,8 @@ async def handle_action_submission(
             await interaction.response.send_message("❌ Action config not found anymore.", ephemeral=True)
             return
 
-        action = session.query(Action).get(ae.action_id)
-        event = session.query(Event).get(ae.event_id)
+        action = ae.action
+        event = ae.event
 
         # Availability checks
         if not action.is_active:
@@ -265,25 +265,10 @@ async def handle_action_submission(
         # User
         user = users_crud.get_or_create_user(session, interaction.user)
 
-        # Optional idempotency for "join_event"
-        if action.action_key == "join_event":
-            already = (
-                session.query(UserAction)
-                .filter(
-                    UserAction.user_id == user.id,
-                    UserAction.action_id == action.id,
-                    UserAction.event_id == event.id
-                )
-                .first()
-            )
-            if already:
-                await interaction.response.send_message("✅ You already joined this event.", ephemeral=True)
-                return
-
         # Record action
         ua = UserAction(
             user_id=user.id,
-            action_id=action.id,
+            action_event_id=ae.id,   # <- new
             event_id=event.id,
             created_by=str(interaction.user.id),
             created_at=now_iso(),
@@ -295,15 +280,24 @@ async def handle_action_submission(
         )
         session.add(ua)
 
-        # Points
-        points = ae.points_granted or 0
+        # --- Points calculation
+        base = ae.points_granted or 0
+        points = base
+
+        # NEW: scale by numeric input when present
+        if numeric is not None:
+            points = base * numeric
+
         if points:
             user.points += points
             user.total_earned += points
 
             ued = (
                 session.query(UserEventData)
-                .filter(UserEventData.user_id == user.id, UserEventData.event_id == event.id)
+                .filter(
+                    UserEventData.user_id == user.id,
+                    UserEventData.event_id == event.id
+                )
                 .first()
             )
             if not ued:
@@ -361,23 +355,45 @@ class UserActions(commands.Cog):
         with db_session() as session:
             rows = get_self_reportable_action_events(session)
 
-            if not rows:
-                await interaction.followup.send("There are no self-reportable actions available right now.", ephemeral=True)
+            user = users_crud.get_or_create_user(session, interaction.user)
+            filtered_rows = []
+            for ae, action, event, revent in rows:
+                if not ae.is_repeatable:
+                    already = (
+                        session.query(UserAction.id)
+                        .filter(
+                            UserAction.user_id == user.id,
+                            UserAction.action_event_id == ae.id
+                        )
+                        .first()
+                    )
+                    if already:
+                        continue  # skip already completed non-repeatables
+                filtered_rows.append((ae, action, event, revent))
+
+            if not filtered_rows:
+                await interaction.followup.send(
+                    "There are no self-reportable actions available right now.",
+                    ephemeral=True
+                )
                 return
 
             options: list[dict] = []
-            for ae, action, event, revent in rows:
+            for ae, action, event, revent in filtered_rows:
                 fields = parse_required_fields(action.input_fields_json)
+                help_map = parse_help_texts(ae.input_help_text, fields)
 
-                label = f"{event.event_key} • {action.action_key} ({ae.variant})"
-                desc = (ae.input_help_text or action.action_description or "").strip()[:100]
-
+                label =f"{event.event_name} • {action.action_description} ({ae.variant})"
+                general = (help_map.get("general") or "").strip()
+                print(f"general {general}")
+                desc = general[:100] or "Report this action"
+        
                 options.append({
                     "label": label,
                     "value": str(ae.id),
-                    "description": desc or "Report this action",
-                    "fields": fields,                       # <- used by modal
-                    "help": ae.input_help_text or "",
+                    "description": desc,
+                    "fields": fields,
+                    "help_map": help_map,
                 })
 
         view = ActionEventView(options)

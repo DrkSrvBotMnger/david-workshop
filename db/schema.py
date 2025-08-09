@@ -187,7 +187,6 @@ class Action(Base):
     deactivated_at = Column(String, nullable=True)
     
     event_configs = relationship("ActionEvent", back_populates="action", passive_deletes=True)
-    performed_actions = relationship("UserAction", back_populates="action")
 
     def __repr__(self):
         return f"<Action {self.action_key} description={self.action_description}>"
@@ -208,6 +207,7 @@ class ActionEvent(Base):
     reward_event_id = Column(Integer, ForeignKey('reward_events.id', ondelete="SET NULL"), nullable=True)		# id in rewards table
     is_allowed_during_visible = Column(Boolean, nullable=False, default=False)
     is_self_reportable = Column(Boolean, nullable=False, default=True)
+    is_repeatable = Column(Boolean, nullable=False, default=True)
     input_help_text = Column(Text, nullable=True)
 
     created_by = Column(String, nullable=False)		# discord unique user id 
@@ -220,6 +220,7 @@ class ActionEvent(Base):
     event = relationship("Event", back_populates="action_configs")
     reward_event = relationship("RewardEvent", back_populates="granted_by_actions")
     change_logs = relationship("ActionEventLog", back_populates="action_event")
+    performed_actions = relationship("UserAction", back_populates="action_event")
 
     __table_args__ = (
     UniqueConstraint('event_id', 'action_id', 'variant', name='uix_event_action_variant'),
@@ -267,7 +268,7 @@ class UserAction(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete="CASCADE"), nullable=False)		# id in users table
-    action_id = Column(Integer, ForeignKey('actions.id', ondelete="RESTRICT"), nullable=False)		# id in actions table
+    action_event_id = Column(Integer, ForeignKey('action_events.id', ondelete="RESTRICT"), nullable=False)		# id in action events table
     event_id = Column(Integer, ForeignKey('events.id', ondelete="RESTRICT"), nullable=True)		# id in events table
 
     created_by= Column(String, nullable=False)		# for when actions are logged by a mod, discord unique user id 
@@ -282,7 +283,7 @@ class UserAction(Base):
     metadata_json = Column(Text, nullable=True)		# optional extras (tbd)
 
     user = relationship("User", back_populates="actions")
-    action = relationship("Action", back_populates="performed_actions")
+    action_event = relationship("ActionEvent", back_populates="performed_actions")
     event = relationship("Event", back_populates="action_logs")
 
     def __repr__(self):

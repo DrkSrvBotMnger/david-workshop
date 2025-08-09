@@ -1,13 +1,169 @@
 import discord
 import json
+import re
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional
-from bot.crud import actions_crud
-from bot.crud.users_crud import action_is_used
+from typing import Optional, List
+from bot.crud import actions_crud, action_events_crud
+from bot.crud.users_crud import ae_is_used_by_action_id
 from bot.config import ALLOWED_ACTION_INPUT_FIELDS, ACTIONS_PER_PAGE
 from bot.utils.time_parse_paginate import admin_or_mod_check, paginate_embeds, now_iso
 from db.database import db_session
+from db.schema import Action, ActionEvent
+
+
+
+# --- HELPERS ---
+
+SHORTCODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+def validate_shortcode(shortcode: str) -> Optional[str]:
+    """Return error message if invalid, else None."""
+    if not SHORTCODE_RE.match(shortcode or ""):
+        return ("❌ Action key must start with a letter and contain only lowercase letters, "
+                "numbers, and underscores (e.g. 'submit_fic').")
+    if len(shortcode) > 64:
+        return "❌ Action key is too long (max 64 characters)."
+    return None
+
+def normalize_fields(selected: List[str]) -> List[str]:
+    """Always return ['general', ...unique valid selections in given order]."""
+    seen = set()
+    cleaned = []
+    for f in selected:
+        if f in ALLOWED_ACTION_INPUT_FIELDS and f not in seen:
+            seen.add(f)
+            cleaned.append(f)
+    # must have at least one after filtering
+    if not cleaned:
+        return []
+    return ["general"] + cleaned
+
+
+
+
+# --- UI: MODAL TO CAPTURE SHORTCODE + DESCRIPTION ---
+
+class CreateActionModal(discord.ui.Modal, title="Create Action"):
+    shortcode = discord.ui.TextInput(
+        label="Action key (For example submit_fic)",
+        placeholder="lowercase_with_underscores",
+        min_length=3,
+        max_length=64
+    )
+    description = discord.ui.TextInput(
+        label="Description",
+        style=discord.TextStyle.paragraph,
+        placeholder="What is this action for?",
+        min_length=5,
+        max_length=100
+    )
+
+    def __init__(self, cog: "AdminActionCommands"):
+        super().__init__()
+        self.cog = cog
+        self._shortcode: Optional[str] = None
+        self._description: Optional[str] = None
+
+    async def on_submit(self, interaction: discord.Interaction):
+        sc = str(self.shortcode.value).strip().lower()  # normalize
+        err = validate_shortcode(sc)
+        if err:
+            await interaction.response.send_message(err, ephemeral=True)
+            return
+        with db_session() as session:
+            if actions_crud.get_action_by_key(session=session, action_key=sc):
+                await interaction.response.send_message(f"❌ Action `{sc}` already exists.", ephemeral=True)
+                return
+        self._shortcode = sc
+        self._description = str(self.description.value).strip()
+    
+        view = FieldSelectView(cog=self.cog, shortcode=self._shortcode, description=self._description)
+        await interaction.response.send_message(
+            "Select at least **one** input field. ‘general’ is added automatically.",
+            view=view,
+            ephemeral=True
+        )
+
+
+
+
+# --- UI: FIELD MULTI-SELECT + CONFIRM ---
+class FieldMultiSelect(discord.ui.Select):
+    def __init__(self, options, parent: "FieldSelectView", row: int = 0):
+        super().__init__(
+            placeholder="Choose input fields…",
+            min_values=1,
+            max_values=len(options),
+            options=[discord.SelectOption(label=f, value=f) for f in options],
+            row=row,
+        )
+        self.parent = parent
+
+    async def callback(self, interaction: discord.Interaction):
+        self.parent._last_selection = list(self.values)
+        await interaction.response.defer()  # prevent “This interaction failed”
+
+
+class FieldSelectView(discord.ui.View):
+    def __init__(self, cog: "AdminActionCommands", shortcode: str, description: str, timeout: Optional[float] = 180):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.shortcode = shortcode
+        self.description = description
+        self._last_selection: List[str] = []
+
+        # force rows: select on row 0, buttons on row 1
+        self.add_item(FieldMultiSelect(options=ALLOWED_ACTION_INPUT_FIELDS, parent=self, row=0))
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success, row=1)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        selected = self._last_selection  # kept up-to-date by FieldMultiSelect.callback
+        fields = normalize_fields(selected)
+        if not fields:
+            await interaction.response.send_message(
+                "❌ You must select at least one valid input field.", ephemeral=True
+            )
+            return
+
+        input_fields_json = json.dumps(fields)
+        with db_session() as session:
+            if actions_crud.get_action_by_key(session=session, action_key=self.shortcode):
+                await interaction.response.send_message(f"❌ Action `{self.shortcode}` already exists.", ephemeral=True)
+                return
+
+            actions_crud.create_action(
+                session=session,
+                action_create_data={
+                    "action_key": self.shortcode,
+                    "action_description": self.description,
+                    "input_fields_json": input_fields_json
+                }
+            )
+
+        await interaction.response.edit_message(
+            content=(
+                "✅ **Action Created**\n"
+                f"**Key:** `{self.shortcode}`\n"
+                f"**Description:** {self.description}\n"
+                f"**Input fields:** {', '.join(fields)}"
+            ),
+            view=None
+        )
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, row=1)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❎ Creation cancelled.", view=None)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True
+
+    async def on_timeout(self):
+        for child in self.children:
+            if isinstance(child, (discord.ui.Button, discord.ui.Select)):
+                child.disabled = True
+
+
 
 
 class AdminActionCommands(commands.GroupCog, name="admin_action"):
@@ -16,118 +172,79 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     def __init__(self, bot):
         self.bot = bot
 
+    
     # === CREATE ACTION ===
     @admin_or_mod_check()
     @app_commands.command(name="create", description="Create a new global action type.")
-    @app_commands.describe(
-        shortcode="Shortcode for the action (lowercase, underscores only, e.g. submit_fic)",
-        description="Description of what this action is for",
-        input_fields=f"Optional: comma-separated list of allowed fields ({', '.join(ALLOWED_ACTION_INPUT_FIELDS)})"
-    )
-    async def create_action(
-        self,
-        interaction: discord.Interaction,
-        shortcode: str,
-        description: str,
-        input_fields: Optional[str] = None
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-
-        # --- Validate action key format ---
-        if not shortcode.isidentifier() or not shortcode.islower():
-            await interaction.followup.send(
-                "❌ Action key must be lowercase letters, numbers, and underscores only (e.g. `submit_fic`)."
-            )
-            return
-
-        # --- Parse and validate input fields ---
-        input_fields_json = None
-        if input_fields:
-            if input_fields.strip():
-                parsed = [f.strip() for f in input_fields.split(",") if f.strip()]
-                for field in parsed:
-                    if field not in ALLOWED_ACTION_INPUT_FIELDS:
-                        await interaction.followup.send(
-                            f"❌ Invalid input field `{field}`. Allowed values: {', '.join(ALLOWED_ACTION_INPUT_FIELDS)}"
-                        )
-                        return
-                input_fields_json = json.dumps(parsed)
-
-        # --- Check for duplicate ---
-        with db_session() as session:
-            if actions_crud.get_action_by_key(
-                session=session, 
-                action_key=shortcode
-            ):
-                await interaction.followup.send(f"❌ Action `{shortcode}` already exists.")
-                return
-
-            action_create_data ={
-                "action_key": shortcode,
-                "action_description": description,
-                "input_fields_json": input_fields_json     
-            }
-
-            actions_crud.create_action(
-                session=session,
-                action_create_data=action_create_data
-            )
-
-        # --- Confirmation ---
-        await interaction.followup.send(
-            f"✅ **Action Created**\n"
-            f"**Key:** `{shortcode}`\n"
-            f"**Description:** {description}\n"
-            f"**Input fields:** {', '.join(json.loads(input_fields_json)) if input_fields_json else 'None'}"
-        )
+    async def create_action(self, interaction: discord.Interaction):
+        """Open a modal, then a select view to configure the action cleanly."""
+        await interaction.response.send_modal(CreateActionModal(self))
 
 
     # === DELETE ACTION ===
     @admin_or_mod_check()
-    @app_commands.describe(
-        shortcode="Shortcode of the action to delete"
+    @app_commands.describe(shortcode="Shortcode of the action to delete")
+    @app_commands.command(
+        name="delete",
+        description="Delete a global action type (if unused and active)."
     )
-    @app_commands.command(name="delete", description="Delete a global action type (if unused and active).")
-    async def delete_action(
-        self, 
-        interaction: discord.Interaction, 
-        shortcode: str
-    ):
+    async def delete_action(self, interaction: discord.Interaction, shortcode: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         with db_session() as session:
             action = actions_crud.get_action_by_key(session, shortcode)
             if not action:
-                await interaction.followup.send(
-                    f"❌ Action `{shortcode}` does not exist."
-                )
+                await interaction.followup.send(f"❌ Action `{shortcode}` does not exist.")
                 return
 
-            # Block if inactive
+            # Business rule: don’t allow deleting inactive actions (history retention)
             if not action.is_active:
                 await interaction.followup.send(
                     f"❌ Action `{shortcode}` is inactive. You cannot delete historical actions."
                 )
                 return
 
-            # Block if referenced in UserAction
-            if action_is_used(session, action.id):
+            # Block if any user history exists for this action
+            if ae_is_used_by_action_id(session, action.id):
                 await interaction.followup.send(
                     f"❌ Action `{shortcode}` is referenced in user history and cannot be deleted.\n"
                     f"Deactivate it instead to keep history intact."
                 )
                 return
-            
-            action = actions_crud.delete_action(
-                session,
-                action_key=shortcode
+
+            # Collect all ActionEvent configs for this Action
+            aes = (
+                session.query(ActionEvent)
+                .filter(ActionEvent.action_id == action.id)
+                .all()
             )
-            if not action:
-            
-                await interaction.edit_original_response(content="❌ Event deletion failed unexpectedly.", view=None)
+
+            # Delete each ActionEvent via CRUD so it gets logged
+            performed_by = str(interaction.user.id)
+            performed_at = now_iso()
+            deleted_configs = 0
+
+            for ae in aes:
+                ok = action_events_crud.delete_action_event(
+                    session=session,
+                    action_event_key=ae.action_event_key,
+                    performed_by=performed_by,
+                    performed_at=performed_at,
+                    force=False,  # flip to True if you want to force logging
+                )
+                if ok:
+                    deleted_configs += 1
+
+            # Finally delete the Action itself (simple CRUD delete)
+            deleted = actions_crud.delete_action(session=session, action_key=shortcode)
+            if not deleted:
+                await interaction.edit_original_response(content="❌ Action deletion failed unexpectedly.", view=None)
                 return
 
-        await interaction.followup.send(f"🗑️ Action `{shortcode}` deleted successfully.")
+        await interaction.followup.send(
+            f"🗑️ Action `{shortcode}` deleted successfully "
+            f"(removed {deleted_configs} configuration(s))."
+        )
 
 
     # === DEACTIVATE ACTION ===

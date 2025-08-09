@@ -1,4 +1,5 @@
 import discord
+import json
 from datetime import datetime, timezone
 from discord import Interaction, ui, Message
 from discord.ui import View, Button
@@ -55,6 +56,7 @@ def format_discord_timestamp(
 # Supported fields for Action definitions
 def parse_required_fields(input_fields_json: str | None) -> list[str]:
     """Return ordered list of required fields (subset of SUPPORTED_FIELDS)."""
+    
     if not input_fields_json:
         return []
     try:
@@ -67,6 +69,45 @@ def parse_required_fields(input_fields_json: str | None) -> list[str]:
         if f in SUPPORTED_FIELDS and f not in out:
             out.append(f)
     return out
+
+
+def parse_help_texts(input_help_text: str | None, fields: list[str]) -> dict[str, str]:
+    """
+    Turn the ActionEvent.input_help_text JSON (a list) into a dict:
+      {
+        "general": "...",
+        "url": "...",
+        "numeric_value": "...",
+        "text_value": "...",
+        "boolean_value": "...",
+        "date_value": "..."
+      }
+    The list is expected as: [general, <one per field in `fields` order>]
+    Missing/short lists are handled gracefully.
+    """
+    result = {"general": ""}
+    if not input_help_text:
+        return result
+    try:
+        items = json.loads(input_help_text)
+    except Exception:
+        return result
+
+    if not isinstance(items, list) or not items:
+        return result
+
+    # index 0 = general
+    result["general"] = str(items[0]).strip() if items and items[0] is not None else ""
+    
+    # the rest follow the order of `fields`
+    per_field = items[1:]
+    for i, fname in enumerate(fields):
+        if i < len(per_field):
+            result[fname] = str(per_field[i]).strip() if per_field[i] is not None else ""
+        else:
+            result[fname] = ""
+
+    return result
 
         
 # Parse Discord message links into channel_id and message_id

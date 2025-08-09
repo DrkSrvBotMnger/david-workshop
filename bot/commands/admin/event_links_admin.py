@@ -2,15 +2,15 @@ from discord import app_commands, Interaction
 from discord.ext import commands
 from bot.utils.time_parse_paginate import admin_or_mod_check, now_iso
 from db.database import db_session
-from db.schema import RewardEvent
+from db.schema import RewardEvent, ActionEvent, Action
 from bot.crud import events_crud, rewards_crud, reward_events_crud, actions_crud, action_events_crud
+from bot.utils.time_parse_paginate import parse_required_fields, parse_help_texts
 
 from bot.ui.admin.event_link_views import (
     EventSelect, RewardSelect, RewardEventSelect, AvailabilitySelect, PricePicker, ForceConfirmView, ActionEventSelect,
-    ActionSelect, VariantPickerView, HelpTextPickerView, YesNoView, ToggleYesNoView,
+    ActionSelect, VariantPickerView, HelpTextPerFieldView, YesNoView, ToggleYesNoView,
     SingleSelectView, PointPickerView
 )
-
 
 class EventLinksAdminFriendly(commands.Cog):
     def __init__(self, bot):
@@ -216,21 +216,33 @@ class EventLinksAdminFriendly(commands.Cog):
                         )
                     is_self_reportable = reportable_view.value
 
-                    # === Step F: Input help text ===
-                    help_view = HelpTextPickerView()
-                    await interaction.followup.send("💬 Do you want to add help text for users?", view=help_view, ephemeral=True)
-                    await help_view.wait()
-                    if help_view.help_text is None:
+                    # === Step F: is_repeatable ===
+                    repeatable_view = ToggleYesNoView("Allow action to be repeated?")
+                    await interaction.followup.send(repeatable_view.prompt, view=repeatable_view, ephemeral=True)
+                    await repeatable_view.wait()
+                    if repeatable_view.value is None:
                         return await interaction.followup.send(
                             f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
                             ephemeral=True
                         )
-                    if help_view.help_text is False:
-                        input_help_text = ""
-                        
-                    input_help_text = help_view.help_text
-
-                    # === Step G: Create Action-Event ===
+                    is_repeatable = repeatable_view.value
+                    
+                    # === Step G: Input help text ===
+                    action_fields = parse_required_fields(action.input_fields_json)    
+                    help_view = HelpTextPerFieldView(fields=action_fields)
+                    await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
+                    await help_view.wait()
+                    if help_view.help_texts_json is None:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    if help_view.help_texts_json is False:
+                        input_help_text = ""  # user chose No
+                    else:
+                        input_help_text = help_view.help_texts_json  # already JSON string
+    
+                    # === Step H: Create Action-Event ===
                     action_events_crud.create_action_event(
                         session,
                         {
@@ -240,6 +252,7 @@ class EventLinksAdminFriendly(commands.Cog):
                             "variant": variant,
                             "is_allowed_during_visible": is_allowed_during_visible,
                             "is_self_reportable": is_self_reportable,
+                            "is_repeatable": is_repeatable,
                             "input_help_text": input_help_text,
                             "reward_event_id": reward_event.id,
                             "created_by": str(interaction.user.id),
@@ -290,6 +303,10 @@ class EventLinksAdminFriendly(commands.Cog):
 
             # === Step 2: Select Reward-Event to Edit ===
             reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
+            if not reward_events:
+                return await interaction.followup.send(
+                    f"❌ No rewards are linked to **{event.event_name}**.", ephemeral=True
+                )
             re_view = SingleSelectView(RewardEventSelect(reward_events))
             await interaction.followup.send("📌 Select reward-event to edit:", view=re_view, ephemeral=True)
             await re_view.wait()
@@ -406,11 +423,11 @@ class EventLinksAdminFriendly(commands.Cog):
                     variant_picker = VariantPickerView()
                     await interaction.followup.send("📌 Select variant:", view=variant_picker, ephemeral=True)
                     await variant_picker.wait()
-                    if not variant_picker:
-                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+                    if not variant_picker.selected_variant:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
                             ephemeral=True
-                        )         
-                
+                        )
                     variant = variant_picker.selected_variant
         
                     # --- Build unique action_event_key ---
@@ -444,21 +461,34 @@ class EventLinksAdminFriendly(commands.Cog):
                             ephemeral=True
                         )
                     is_self_reportable = reportable_view.value
-        
-                    # === Step F: Input help text ===
-                    help_view = HelpTextPickerView()
-                    await interaction.followup.send("💬 Do you want to add help text for users?", view=help_view, ephemeral=True)
-                    await help_view.wait()
-                    if help_view.help_text is None:
-                        return await interaction.followup.send(f"{msg_timeout}\n{msg_del_success}{msg_ae_fail}\n{msg_re_success}",
+
+                    # === Step F: is_repeatable ===
+                    repeatable_view = ToggleYesNoView("Allow action to be repeated?")
+                    await interaction.followup.send(repeatable_view.prompt, view=repeatable_view, ephemeral=True)
+                    await repeatable_view.wait()
+                    if repeatable_view.value is None:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
                             ephemeral=True
                         )
-                    if help_view.help_text is False:
-                        input_help_text = ""
+                    is_repeatable = repeatable_view.value
         
-                    input_help_text = help_view.help_text
+                    # === Step G: Input help text ===
+                    action_fields = parse_required_fields(action.input_fields_json)  
+                    help_view = HelpTextPerFieldView(fields=action_fields)
+                    await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
+                    await help_view.wait()
+                    if help_view.help_texts_json is None:
+                        return await interaction.followup.send(
+                            f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}",
+                            ephemeral=True
+                        )
+                    if help_view.help_texts_json is False:
+                        input_help_text = ""  # user chose No
+                    else:
+                        input_help_text = help_view.help_texts_json  # already JSON string
         
-                    # === Step G: Create Action-Event ===
+                    # === Step H: Create Action-Event ===
                     action_events_crud.create_action_event(
                         session,
                         {
@@ -468,6 +498,7 @@ class EventLinksAdminFriendly(commands.Cog):
                             "variant": variant,
                             "is_allowed_during_visible": is_allowed_during_visible,
                             "is_self_reportable": is_self_reportable,
+                            "is_repeatable": is_repeatable,
                             "input_help_text": input_help_text,
                             "reward_event_id": reward_event.id,
                             "created_by": str(interaction.user.id),
@@ -659,16 +690,29 @@ class EventLinksAdminFriendly(commands.Cog):
             if reportable_view.value is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
             is_self_reportable = reportable_view.value
-    
-            # === Step 7: Help Text? ===
-            help_view = HelpTextPickerView()
-            await interaction.followup.send("💬 Add help text?", view=help_view, ephemeral=True)
-            await help_view.wait()
-            if help_view.help_text is None:
+
+            # === Step 7: is_repeatable ===
+            repeatable_view = ToggleYesNoView("Allow action to be repeated?")
+            await interaction.followup.send(repeatable_view.prompt, view=repeatable_view, ephemeral=True)
+            await repeatable_view.wait()
+            if repeatable_view.value is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
-            input_help_text = "" if help_view.help_text is False else help_view.help_text
+            is_repeatable = repeatable_view.value
     
-            # === Step 8: Create Action-Event ===
+            # === Step 8: Help Text? ===
+
+            action_fields = parse_required_fields(action.input_fields_json)
+            help_view = HelpTextPerFieldView(fields=action_fields)
+            await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
+            await help_view.wait()
+            if help_view.help_texts_json is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            if help_view.help_texts_json is False:
+                input_help_text = ""  # user chose No
+            else:
+                input_help_text = help_view.help_texts_json  # already JSON string
+    
+            # === Step 9: Create Action-Event ===
             iso_now = now_iso()
             ae = action_events_crud.create_action_event(
                 session,
@@ -680,6 +724,7 @@ class EventLinksAdminFriendly(commands.Cog):
                     "points_granted": points_granted,
                     "is_allowed_during_visible": is_allowed_during_visible,
                     "is_self_reportable": is_self_reportable,
+                    "is_repeatable": is_repeatable,
                     "input_help_text": input_help_text,
                     "reward_event_id": None,
                     "created_by": str(interaction.user.id),
@@ -726,9 +771,16 @@ class EventLinksAdminFriendly(commands.Cog):
                 force = True
     
             # === Step 2: Select Standalone ActionEvent ===
-            standalone_aes = session.query(action_events_crud.ActionEvent).filter_by(
-                event_id=event.id, reward_event_id=None
-            ).all()
+            standalone_aes = (
+                session.query(ActionEvent)
+                .join(Action, Action.id == ActionEvent.action_id)
+                .filter(
+                    ActionEvent.event_id == event.id,
+                    ActionEvent.reward_event_id.is_(None),
+                    Action.is_active.is_(True),
+                )
+                .all()
+            )
     
             if not standalone_aes:
                 return await interaction.followup.send("❌ No standalone action-events to edit.", ephemeral=True)
@@ -771,16 +823,33 @@ class EventLinksAdminFriendly(commands.Cog):
             if reportable_view.value is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
             is_self_reportable = reportable_view.value
-    
-            # === Step 6: Help Text? ===
-            help_view = HelpTextPickerView()
-            await interaction.followup.send("💬 Update help text?", view=help_view, ephemeral=True)
-            await help_view.wait()
-            if help_view.help_text is None:
+
+            # === Step 6: is_repeatable ===
+            repeatable_view = ToggleYesNoView("Allow action to be repeated?")
+            await interaction.followup.send(repeatable_view.prompt, view=repeatable_view, ephemeral=True)
+            await repeatable_view.wait()
+            if repeatable_view.value is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
-            input_help_text = "" if help_view.help_text is False else help_view.help_text
+            is_repeatable = repeatable_view.value
     
-            # === Step 7: Perform Update ===
+            # === Step 7: Help Text? ===
+            # Build fields list based on the linked Action
+
+            linked_action = ae.action
+            action_fields = parse_required_fields(linked_action.input_fields_json)
+            prefills = parse_help_texts(ae.input_help_text, action_fields)
+                
+            help_view = HelpTextPerFieldView(fields=action_fields)
+            await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
+            await help_view.wait()
+            if help_view.help_texts_json is None:
+                return await interaction.followup.send(msg_timeout, ephemeral=True)
+            if help_view.help_texts_json is False:
+                input_help_text = ""  # user chose No
+            else:
+                input_help_text = help_view.help_texts_json  # already JSON string
+    
+            # === Step 8: Perform Update ===
             iso_now = now_iso()
             updated = action_events_crud.update_action_event(
                 session,
@@ -789,6 +858,7 @@ class EventLinksAdminFriendly(commands.Cog):
                     "points_granted": points_granted,
                     "is_allowed_during_visible": is_allowed_during_visible,
                     "is_self_reportable": is_self_reportable,
+                    "is_repeatable": is_repeatable,
                     "input_help_text": input_help_text,
                     "modified_by": str(interaction.user.id),
                     "modified_at": iso_now
@@ -837,10 +907,16 @@ class EventLinksAdminFriendly(commands.Cog):
                 force = True
     
             # === Step 2: Select Standalone Action-Event ===
-            standalone_aes = session.query(action_events_crud.ActionEvent).filter_by(
-                event_id=event.id,
-                reward_event_id=None
-            ).all()
+            standalone_aes = (
+                session.query(ActionEvent)
+                .join(Action, Action.id == ActionEvent.action_id)
+                .filter(
+                    ActionEvent.event_id == event.id,
+                    ActionEvent.reward_event_id.is_(None),
+                    Action.is_active.is_(True),
+                )
+                .all()
+            )
     
             if not standalone_aes:
                 return await interaction.followup.send("❌ No standalone action-events found for this event.", ephemeral=True)

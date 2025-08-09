@@ -519,8 +519,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                         content=(
                             f"📦 **Archived Header** for `{reward_name}` (`{reward_key}`)\n"
                             f"*Originally published on:* {preset_at or 'Unknown'}\n\n"
-                            f"{old_header.content or ''}"
-                        ),
+                            f"{old_header.content or ''}"),
                         embeds=old_header.embeds,
                         files=[await a.to_file() for a in old_header.attachments]
                     )

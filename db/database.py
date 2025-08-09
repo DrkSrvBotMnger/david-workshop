@@ -8,6 +8,8 @@ mode = os.getenv("DB_MODE", "dev").lower()
 
 if mode == "test":
     DATABASE_URL = os.getenv("DATABASE_URL_TEST")
+elif mode == "qa":
+    DATABASE_URL = os.getenv("DATABASE_URL_QA")
 elif mode == "prod":
     DATABASE_URL = os.getenv("DATABASE_URL")
 else:

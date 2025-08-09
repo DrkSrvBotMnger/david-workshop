@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from bot.crud import general_crud
 from bot.utils.time_parse_paginate import now_iso
-from db.schema import User, UserAction
+from db.schema import User, Action, UserAction, ActionEvent
 import discord
 from discord import app_commands, File, Interaction, Embed, User as DiscordUser, SelectOption
 
@@ -72,13 +72,29 @@ def update_user(
     user.modified_at = iso_now
     
     return user
-
+ 
 
 # --- VALIDATE ---
-def action_is_used(
+def ae_is_used_by_action_id(
     session: Session, 
     action_id: int
 ) -> bool:
     """Return True if any UserAction references this action_key."""
-    
-    return session.query(UserAction).filter(UserAction.action_id == action_id).first() is not None
+
+    return (
+        session.query(UserAction)
+        .join(ActionEvent, UserAction.action_event_id == ActionEvent.id)
+        .join(Action, ActionEvent.action_id == Action.id)
+        .filter(Action.id == action_id)
+        .first()
+        is not None
+    )
+
+
+def ae_is_used_by_ae_id(
+        session: Session, 
+        action_event_id: int
+    ) -> bool:
+        """Return True if any UserAction references this action_key."""
+
+        return session.query(UserAction).filter(UserAction.action_event_id == action_event_id).first() is not None

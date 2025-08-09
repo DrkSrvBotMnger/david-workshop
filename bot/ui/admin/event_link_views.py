@@ -217,6 +217,79 @@ class HelpTextPickerView(discord.ui.View):
         self.stop()
 
 
+# ====== PER-FIELD HELP TEXT MODAL ======
+class HelpTextPerFieldModal(discord.ui.Modal):
+    def __init__(self, fields: list[str], prefills: list[str] | None = None):
+        # fields excludes "general" — we always add a General input automatically
+        super().__init__(title="User Help Texts")
+        self.fields = fields
+        self.prefills = prefills or []
+        self.result_json: str | None = None
+
+        # General
+        general_prefill = (self.prefills[0].strip() if len(self.prefills) >= 1 else "")
+        self.general_input = discord.ui.TextInput(
+            label="General help (shown to all users)",
+            placeholder="Brief instructions shown before field-specific tips",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            default=general_prefill,
+            max_length=100
+        )
+        self.add_item(self.general_input)
+
+        # One input per field in the same order as Action.input_fields_json (excluding "general")
+        for idx, f in enumerate(self.fields, start=1):
+            prefill = (self.prefills[idx].strip() if len(self.prefills) > idx else "")
+            ti = discord.ui.TextInput(
+                label=f"Help for: {f}",
+                placeholder=f"e.g., what should users put in `{f}`?",
+                style=discord.TextStyle.paragraph,
+                required=False,
+                default=prefill,
+                max_length=100
+            )
+            setattr(self, f"help_{f}", ti)
+            self.add_item(ti)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Build list: [general, <per-field in fields order>]
+        values = [str(self.general_input.value or "").strip()]
+        for f in self.fields:
+            ti: discord.ui.TextInput = getattr(self, f"help_{f}")
+            values.append(str(ti.value or "").strip())
+        import json as _json
+        self.result_json = _json.dumps(values)
+        await interaction.response.defer()
+
+
+# ====== YES/NO VIEW THAT OPENS THE PER-FIELD MODAL ======
+class HelpTextPerFieldView(discord.ui.View):
+    def __init__(self, fields: list[str], prefills: list[str] | None = None):
+        super().__init__(timeout=60)
+        # `fields` should be action.input_fields_json with "general" removed
+        self.fields = [f for f in fields if f != "general"]
+        self.prefills = prefills
+        self.help_texts_json: str | bool | None = None  # str -> json, False -> user chose No, None -> timeout
+
+    @discord.ui.button(label="✅ Yes", style=discord.ButtonStyle.success, row=0)
+    async def yes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = HelpTextPerFieldModal(self.fields, self.prefills)
+        await interaction.response.send_modal(modal)
+        await modal.wait()
+        # If the modal was submitted, it sets result_json
+        if modal.result_json is not None:
+            self.help_texts_json = modal.result_json
+        self.stop()
+
+    @discord.ui.button(label="❌ No", style=discord.ButtonStyle.secondary, row=0)
+    async def no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.help_texts_json = False  # explicitly no help text
+        await interaction.response.defer()
+        self.stop()
+
+
+
 # ====== TOGGLE YES/NO VIEW ======
 class ToggleYesNoView(discord.ui.View):
     def __init__(self, prompt: str):

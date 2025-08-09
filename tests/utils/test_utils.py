@@ -1,5 +1,5 @@
 import pytest
-from bot.utils import safe_parse_date, format_discord_timestamp, format_log_entry
+from bot.utils.time_parse_paginate import safe_parse_date, format_discord_timestamp, format_log_entry
 
 
 # --- safe_parse_date ---
