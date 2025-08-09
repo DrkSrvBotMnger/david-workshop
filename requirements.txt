@@ -1,7 +1,5 @@
-discord.py
-sqlalchemy
-psycopg2-binary
-pytest
-pytest-asyncio
-pre-commit
-pillow
+discord.py==2.5.2
+SQLAlchemy==2.0.41
+psycopg2-binary==2.9.10
+Pillow==11.3.0
+regex==2025.7.34

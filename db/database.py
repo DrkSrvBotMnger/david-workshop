@@ -3,20 +3,18 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# Manual control via DB_MODE
 mode = os.getenv("DB_MODE", "dev").lower()
 
-if mode == "test":
+if mode in ("test",):
     DATABASE_URL = os.getenv("DATABASE_URL_TEST")
-elif mode == "qa":
+elif mode in ("qa", "staging"):
     DATABASE_URL = os.getenv("DATABASE_URL_QA")
-elif mode == "prod":
+elif mode in ("prod", "production"):
     DATABASE_URL = os.getenv("DATABASE_URL")
 else:
     DATABASE_URL = os.getenv("DATABASE_URL_DEV")
     
 print(mode)
-print(DATABASE_URL)
 
 if not DATABASE_URL:
     raise RuntimeError(

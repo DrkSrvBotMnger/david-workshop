@@ -18,7 +18,7 @@ DEV_CONFIG = {
 }
 
 # QA config (Railway)
-TEST_CONFIG = {
+QA_CONFIG = {
     "MOD_ROLE_IDS": [
         1392541137415311410
     ],
@@ -41,13 +41,17 @@ PROD_CONFIG = {
     "REWARD_PRESET_ARCHIVE_CHANNEL_ID": 1135642815687303260
 }
 
-if ENV == "dev" or "tu":
+
+if ENV in {"dev", "tu"}:
     CONFIG = DEV_CONFIG
-elif ENV == "test":
-    CONFIG = TEST_CONFIG
-else:
+elif ENV in {"qa", "test", "staging"}:
+    CONFIG = QA_CONFIG
+elif ENV in {"prod", "production"}:
     CONFIG = PROD_CONFIG
-    
+else:
+    CONFIG = DEV_CONFIG  # safe default
+
+
 # Easy access in other files:
 MOD_ROLE_IDS = CONFIG["MOD_ROLE_IDS"]
 EMBED_CHANNEL_ID = CONFIG["EMBED_CHANNEL_ID"]
