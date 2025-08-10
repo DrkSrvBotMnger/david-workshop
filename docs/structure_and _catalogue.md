@@ -159,7 +159,10 @@
 
 ### bot/services/inventory\_service.py
 
-* `get_user_publishables_for_preview(session, user_id)` — publishable reward select for preview UI
+* `get_user_publishables_for_preview(session, user_id)` -> Dict[str, Tuple[str, str, str]]
+    * Builds a select map for previewing publishable rewards:
+    * reward_key → (channel_id, message_id, label).
+    * Filters by PUBLISHABLE_REWARD_TYPES and requires both pointers.
 
 ---
 
@@ -201,7 +204,7 @@
 ### bot/cogs/user/profile\_cog.py
 
 * `/profile` — show profile card with equip buttons
-* `/inventory` — show inventory list
+* `/inventory` — show inventory list with preview publishable button
 * `/equip_title` — open title equip view
 * `/equip_badge` — open badge equip view
 

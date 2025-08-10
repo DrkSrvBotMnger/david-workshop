@@ -12,6 +12,215 @@ from db.schema import EventLog, EventStatus
 from bot.ui.admin.event_dashboard_view import EventDashboardView, build_event_embed
 
 
+# --- NEW: Picker UI for /admin_event show ---
+
+from dataclasses import dataclass
+
+PAGE_SIZE = 25  # Discord select max
+
+@dataclass
+class _EventRow:
+    key: str
+    name: str
+    status: str
+    priority: int
+    modified_at: str | None
+    created_at: str
+
+def _load_events(session, status_filter: str | None) -> list[_EventRow]:
+    """Fetch and map events for the picker."""
+    events = events_crud.get_all_events(
+        session=session,
+        tag=None,
+        event_status=status_filter,   # expects 'draft'|'visible'|'active'|'archived' or None
+        mod_by_discord_id=None
+    )
+    rows: list[_EventRow] = []
+    for e in events:
+        rows.append(
+            _EventRow(
+                key=e.event_key,
+                name=e.event_name,
+                status=e.event_status.value,
+                priority=e.priority or 0,
+                modified_at=e.modified_at,
+                created_at=e.created_at,
+            )
+        )
+    # Sort most-recent first (match list command’s feel)
+    rows.sort(key=lambda r: (r.modified_at or r.created_at, r.priority), reverse=True)
+    return rows
+
+class AdminEventPickerView(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction, guild_id: int | None):
+        super().__init__(timeout=180)
+        self.interaction = interaction
+        self.guild_id = guild_id
+        self.status_filter: str | None = None  # None = All
+        self.page: int = 0
+        self.rows: list[_EventRow] = []
+        self._event_select: discord.ui.Select | None = None
+        self._status_select: discord.ui.Select | None = None
+        self._prev_btn: discord.ui.Button | None = None
+        self._next_btn: discord.ui.Button | None = None
+
+        # Build controls
+        self._status_select = discord.ui.Select(
+            placeholder="Filter by status…",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label="All", value="__all__", emoji="📋"),
+                discord.SelectOption(label="Draft", value="draft", emoji="📝"),
+                discord.SelectOption(label="Visible", value="visible", emoji="👁️"),
+                discord.SelectOption(label="Active", value="active", emoji="🎉"),
+                discord.SelectOption(label="Archived", value="archived", emoji="📦"),
+            ],
+        )
+        self._status_select.callback = self._on_status_changed
+        self.add_item(self._status_select)
+
+        self._event_select = discord.ui.Select(
+            placeholder="Pick an event…",
+            min_values=1,
+            max_values=1,
+            options=[],  # filled by _refresh_options
+        )
+        self._event_select.callback = self._on_event_picked
+        self.add_item(self._event_select)
+
+        self._prev_btn = discord.ui.Button(label="Prev", style=discord.ButtonStyle.secondary)
+        self._next_btn = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary)
+        self._prev_btn.callback = self._on_prev
+        self._next_btn.callback = self._on_next
+        self.add_item(self._prev_btn)
+        self.add_item(self._next_btn)
+
+    async def on_timeout(self) -> None:
+        for c in self.children:
+            if hasattr(c, "disabled"):
+                c.disabled = True  # type: ignore[attr-defined]
+        try:
+            await self.interaction.edit_original_response(view=self)
+        except Exception:
+            pass
+
+    async def refresh(self):
+        """Reload data from DB, clamp page, rebuild options and button states."""
+        from db.database import db_session  # local import to avoid cycles
+        with db_session() as session:
+            self.rows = _load_events(session, self.status_filter)
+
+        total = len(self.rows)
+        max_page = 0 if total == 0 else (total - 1) // PAGE_SIZE
+        self.page = max(0, min(self.page, max_page))
+
+        # Build current page options
+        if total == 0:
+            options = [
+                discord.SelectOption(label="No events found for this filter", value="__none__", description="")
+            ]
+            self._event_select.options = options
+            self._event_select.disabled = True
+        else:
+            start = self.page * PAGE_SIZE
+            chunk = self.rows[start:start + PAGE_SIZE]
+            options = []
+            for r in chunk:
+                label = r.name[:100]  # Discord limit
+                desc = f"{r.key} • {r.status.capitalize()}"
+                options.append(discord.SelectOption(label=label, value=r.key, description=desc))
+            self._event_select.options = options
+            self._event_select.disabled = False
+
+        # Buttons state
+        self._prev_btn.disabled = (self.page <= 0 or total == 0)
+        self._next_btn.disabled = (total == 0 or (self.page + 1) * PAGE_SIZE >= total)
+
+    async def _on_status_changed(self, interaction: discord.Interaction):
+        val = self._status_select.values[0]
+        self.status_filter = None if val == "__all__" else val
+        self.page = 0
+        await self.refresh()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_prev(self, interaction: discord.Interaction):
+        if self.page > 0:
+            self.page -= 1
+            await self.refresh()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_next(self, interaction: discord.Interaction):
+        self.page += 1
+        await self.refresh()
+        await interaction.response.edit_message(view=self)
+
+    async def _on_event_picked(self, interaction: discord.Interaction):
+        """Load the dashboard for the picked event and swap the view."""
+        picked_key = self._event_select.values[0]
+        if picked_key == "__none__":
+            await interaction.response.defer()
+            return
+
+        from db.database import db_session
+        from bot.crud import action_events_crud, reward_events_crud
+
+        # Fetch full metadata
+        with db_session() as session:
+            event = events_crud.get_event_by_key(session, event_key=picked_key)
+            if not event:
+                await interaction.response.send_message(f"❌ Event `{picked_key}` not found anymore.", ephemeral=True)
+                return
+
+            event_data = {
+                "event_name": event.event_name,
+                "event_key": event.event_key,
+                "start_date": event.start_date,
+                "end_date": event.end_date,
+                "tags": event.tags,
+                "event_description": event.event_description,
+                "created_by": event.created_by,
+                "created_at": event.created_at,
+                "modified_by": event.modified_by,
+                "modified_at": event.modified_at,
+                "priority": event.priority,
+                "coordinator_discord_id": event.coordinator_discord_id,
+                "role_discord_id": event.role_discord_id,
+                "embed_message_discord_id": event.embed_message_discord_id,
+                "embed_channel_discord_id": event.embed_channel_discord_id,
+                "event_status": event.event_status.value,
+                "event_type": event.event_type
+            }
+
+            action_events = action_events_crud.get_action_events_for_event(session, event.id)
+            actions_data = []
+            for ae in action_events:
+                actions_data.append({
+                    "action_key": ae.action.action_key if ae.action else None,
+                    "variant": ae.variant,
+                    "points_granted": ae.points_granted,
+                    "reward_event_key": ae.reward_event.reward_event_key if ae.reward_event else None,
+                    "is_allowed_during_visible": ae.is_allowed_during_visible,
+                    "is_self_reportable": ae.is_self_reportable,
+                    "input_help_text": ae.input_help_text
+                })
+
+            reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
+            rewards_data = []
+            for re in reward_events:
+                rewards_data.append({
+                    "reward_name": re.reward.reward_name,
+                    "reward_key": re.reward.reward_key if re.reward else None,
+                    "price": re.price,
+                    "availability": re.availability
+                })
+
+        # Swap to dashboard
+        dashboard = EventDashboardView(event_data, actions_data, rewards_data, self.guild_id)
+        embed = build_event_embed(event_data, self.guild_id)
+        await interaction.response.edit_message(embed=embed, view=dashboard)
+
+
 class AdminEventCommands(commands.GroupCog, name="admin_event"):
     """Admin commands for managing events."""
     def __init__(self, bot):
@@ -390,69 +599,27 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
     # === SHOW EVENT METADATA ===
     @admin_or_mod_check()
-    @app_commands.command(name="show", description="Display full metadata of a specific event.")
-    async def show_event(self, interaction: Interaction, shortcode: str):
+    @app_commands.command(name="show", description="Display event dashboard with a picker (no shortcode needed).")
+    async def show_event(self, interaction: Interaction):
+        """Opens an event picker; after selection, shows the Event Dashboard."""
         await interaction.response.defer(ephemeral=True)
 
-        with db_session() as session:
-            # --- Get Event ---
-            event = events_crud.get_event_by_key(session, event_key=shortcode)
-            if not event:
-                await interaction.followup.send(f"❌ Event `{shortcode}` not found.")
-                return
-
-            # --- Convert Event to dict ---
-            event_data = {
-                "event_name": event.event_name,
-                "event_key": event.event_key,
-                "start_date": event.start_date,
-                "end_date": event.end_date,
-                "tags": event.tags,
-                "event_description": event.event_description,
-                "created_by": event.created_by,
-                "created_at": event.created_at,
-                "modified_by": event.modified_by,
-                "modified_at": event.modified_at,
-                "priority": event.priority,
-                "coordinator_discord_id": event.coordinator_discord_id,
-                "role_discord_id": event.role_discord_id,
-                "embed_message_discord_id": event.embed_message_discord_id,
-                "embed_channel_discord_id": event.embed_channel_discord_id,
-                "event_status": event.event_status.value,
-                "event_type": event.event_type
-            }
-
-            # --- Get linked Actions ---
-            action_events = action_events_crud.get_action_events_for_event(session, event.id)
-            actions_data = []
-            for ae in action_events:
-                actions_data.append({
-                    "action_key": ae.action.action_key if ae.action else None,
-                    "variant": ae.variant,
-                    "points_granted": ae.points_granted,
-                    "reward_event_key": ae.reward_event.reward_event_key if ae.reward_event else None,
-                    "is_allowed_during_visible": ae.is_allowed_during_visible,
-                    "is_self_reportable": ae.is_self_reportable,
-                    "input_help_text": ae.input_help_text
-                })
-
-            # --- Get linked Rewards ---
-            reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
-            rewards_data = []
-            for re in reward_events:
-                rewards_data.append({
-"reward_name":re.reward.reward_name,
-                    "reward_key": re.reward.reward_key if re.reward else None,
-                    "price": re.price,
-                    "availability": re.availability
-                })
-
-        # --- Create View ---
         guild_id = interaction.guild.id if interaction.guild else None
-        view = EventDashboardView(event_data, actions_data, rewards_data, guild_id)
+        view = AdminEventPickerView(interaction, guild_id)
+        await view.refresh()
 
-        # --- Send initial view ---
-        await interaction.followup.send(embed=build_event_embed(event_data, guild_id), view=view)
+        # Compact helper embed while picking
+        pick_embed = Embed(
+            title="🗓️ Event Browser",
+            description=(
+                "Use the **Status** filter and **Event** dropdown to open an event dashboard.\n"
+                "• Max 25 options per page—use **Prev/Next** to navigate.\n"
+                "• This panel is ephemeral (only you see it)."
+            ),
+            color=discord.Color.blurple()
+        )
+
+        await interaction.followup.send(embed=pick_embed, view=view)
 
 
     # === EVENT LOGS ===
