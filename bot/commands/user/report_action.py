@@ -5,7 +5,7 @@ import re
 import discord
 from discord import app_commands, Interaction
 from discord.ext import commands
-
+from sqlalchemy import and_, or_
 from db.database import db_session
 from db.schema import (
     User, Event, Action, ActionEvent, RewardEvent, Reward, Inventory, UserAction, UserEventData
@@ -28,19 +28,23 @@ def get_self_reportable_action_events(session):
     """
     q = (
         session.query(ActionEvent, Action, Event, RewardEvent)
-        .join(Action, ActionEvent.action_id == Action.id)
+        .join(Action, ActionEvent.action_id == Action.id)               # inner join => action must exist
         .join(Event, ActionEvent.event_id == Event.id)
         .outerjoin(RewardEvent, RewardEvent.id == ActionEvent.reward_event_id)
-        .filter(Action.is_active == True)
-        .filter(ActionEvent.is_self_reportable == True)
+        .filter(and_(
+            Action.is_active.is_(True),
+            Action.deactivated_at.is_(None)   # in case is_active wasn’t flipped
+        ))
+        .filter(ActionEvent.is_self_reportable.is_(True))
     )
+
     rows = []
     for ae, action, event, revent in q.all():
+        # keep your python-side event status rule to avoid enum-compare pitfalls
         status = getattr(event.event_status, "name", str(event.event_status))
         if status == "active" or (status == "visible" and bool(ae.is_allowed_during_visible)):
             rows.append((ae, action, event, revent))
     return rows
-
 
 # -----------------------------
 # Dynamic Modal for any combination of fields (max 5 inputs)

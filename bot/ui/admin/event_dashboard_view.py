@@ -77,13 +77,31 @@ class EventDashboardView(discord.ui.View):
         page_items = self.actions_data[start:end]
 
         for ae in page_items:
-            reward_display = f"🏆 {ae['reward_event_key']}" if ae["reward_event_key"] else "None"
+            # Show reward only if linked
+            top_parts = []
+            if ae["reward_event_key"]:
+                top_parts.append(f"🏆 {ae['reward_event_key']}")
+
+            # Show points if > 0 OR (== 0 AND no reward)
+            if (ae["points_granted"] and ae["points_granted"] > 0) or (not ae["reward_event_key"]):
+                top_parts.append(f"🎯 Points: {ae['points_granted']}")
+
+            flags = (
+                f"👁 Visible: {'✅' if ae['is_allowed_during_visible'] else '❌'} | "
+                f"🙋 Self-report: {'✅' if ae['is_self_reportable'] else '❌'}"
+            )
+
+            # Help only if provided
+            help_line = f"💬 Help: {ae['input_help_text']}" if ae.get("input_help_text") else None
+
+            value = " | ".join(top_parts) if top_parts else "—"
+            value += f"\n{flags}"
+            if help_line:
+                value += f"\n{help_line}"
+
             embed.add_field(
                 name=f"**{ae['action_key']}** (`{ae['variant']}`)",
-                value=(f"🎯 Points: {ae['points_granted']} | Reward: {reward_display}\n"
-                       f"👁 Visible: {'✅' if ae['is_allowed_during_visible'] else '❌'} | "
-                       f"🙋 Self-report: {'✅' if ae['is_self_reportable'] else '❌'}\n"
-                       f"💬 Help: {ae['input_help_text'] or 'N/A'}"),
+                value=value,
                 inline=False
             )
 
@@ -91,6 +109,8 @@ class EventDashboardView(discord.ui.View):
         embed.set_footer(text=f"Page {self.actions_page + 1}/{total_pages} • {len(self.actions_data)} actions total")
         return embed
 
+
+    
     def build_rewards_embed(self):
         embed = discord.Embed(
             title=f"🎁 Rewards for {self.event_data['event_name']}",
@@ -106,15 +126,27 @@ class EventDashboardView(discord.ui.View):
 
         for re in page_items:
             availability_icon = "🛒" if re["availability"] == "inshop" else "🎯"
+            value = f"{availability_icon} Availability: {re['availability']} | 💰 Price: {re['price']}"
+
+            if re["availability"] == "onaction":
+                key = re.get("linked_action_key")
+                var = re.get("linked_variant")
+                if key:
+                    pretty = f"`{key}` (`{var}`)" if var else f"`{key}`"
+                    value += f"\n🔗 Linked to: {pretty}"
+                else:
+                    value += "\n⚠️ **On-action** but **no action linked yet**"
+
             embed.add_field(
                 name=f"**{re['reward_name']}** (`{re['reward_key']}`)",
-                value=(f"{availability_icon} Availability: {re['availability']} | 💰 Price: {re['price']}"),
+                value=value,
                 inline=False
             )
 
         total_pages = max(1, (len(self.rewards_data) - 1) // self.items_per_page + 1)
         embed.set_footer(text=f"Page {self.rewards_page + 1}/{total_pages} • {len(self.rewards_data)} rewards total")
         return embed
+
 
     # === BUTTON BUILDER ===
     def refresh_buttons(self):

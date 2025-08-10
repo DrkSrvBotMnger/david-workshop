@@ -8,8 +8,14 @@ from bot.crud import events_crud, action_events_crud, reward_events_crud
 from bot.config import EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
 from bot.utils.time_parse_paginate import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, parse_message_link, post_announcement_message
 from db.database import db_session
-from db.schema import EventLog, EventStatus
+from db.schema import EventLog, EventStatus, ActionEvent, Action
 from bot.ui.admin.event_dashboard_view import EventDashboardView, build_event_embed
+from io import StringIO, BytesIO
+import csv
+from collections import defaultdict
+from typing import Iterable
+
+from bot.crud import reports_crud  # <-- NEW
 
 
 # --- NEW: Picker UI for /admin_event show ---
@@ -17,6 +23,236 @@ from bot.ui.admin.event_dashboard_view import EventDashboardView, build_event_em
 from dataclasses import dataclass
 
 PAGE_SIZE = 25  # Discord select max
+
+
+# If you don't already have this:
+try:
+    from bot.utils.parsing import safe_parse_date  # noqa
+except Exception:
+    from datetime import datetime
+    def safe_parse_date(s: str) -> str | None:
+        try:
+            datetime.strptime(s, "%Y-%m-%d")
+            return s
+        except Exception:
+            return None
+
+def _group_by_action(rows: list[dict]) -> dict[str, list[dict]]:
+    g: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        g[r.get("action_key") or "unknown"].append(r)
+    return g
+
+def _group_by_user(rows: list[dict]) -> dict[str, list[dict]]:
+    """
+    Key by user mention when possible; fallback to display_name.
+    """
+    g: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        mention = f"<@{r['user_discord_id']}>" if r.get("user_discord_id") else None
+        key = mention or r.get("display_name") or "Unknown User"
+        g[key].append(r)
+    return g
+
+def _make_report_pages_group_by_action(rows: list[dict], *, title: str) -> list[discord.Embed]:
+    pages: list[discord.Embed] = []
+    grouped = _group_by_action(rows)
+    items = sorted(grouped.items(), key=lambda kv: kv[0])
+    def new_embed():
+        return discord.Embed(title=title, color=discord.Color.green()).set_footer(text="Grouped by Action")
+    emb, count = new_embed(), 0
+    for action_key, bucket in items:
+        lines = []
+        for r in bucket:
+            stamp = r["created_at"]
+            who = f"<@{r['user_discord_id']}>" if r.get("user_discord_id") else r.get("display_name", "Unknown")
+            url = r.get("url")
+            extra = []
+            if r.get("numeric_value") is not None: extra.append(str(r["numeric_value"]))
+            if r.get("text_value"): extra.append(str(r["text_value"])[:60])
+            if r.get("boolean_value") is not None: extra.append("✅" if r["boolean_value"] else "❌")
+            suffix = f"  ({' | '.join(extra)})" if extra else ""
+            lines.append(f"• {who} — {url}{suffix}  ({stamp})" if url else f"• {who}{suffix}  ({stamp})")
+        emb.add_field(name=f"{action_key} ({len(bucket)})", value=("\n".join(lines)[:1024] or "—"), inline=False)
+        count += 1
+        if count >= 25:
+            pages.append(emb)
+            emb, count = new_embed(), 0
+    if count or not pages:
+        pages.append(emb)
+    return pages
+
+def _make_report_pages_group_by_user(rows: list[dict], *, title: str) -> list[discord.Embed]:
+    pages: list[discord.Embed] = []
+    grouped = _group_by_user(rows)
+    items = sorted(grouped.items(), key=lambda kv: kv[0].lower())
+    def new_embed():
+        return discord.Embed(title=title, color=discord.Color.green()).set_footer(text="Grouped by User")
+    emb, count = new_embed(), 0
+    for user_key, bucket in items:
+        lines = []
+        for r in bucket:
+            stamp = str(r.get("created_at", ""))
+            action_key = r.get("action_key") or "unknown"
+            url = r.get("url")
+            extra = []
+            if r.get("numeric_value") is not None: extra.append(str(r["numeric_value"]))
+            if r.get("text_value"): extra.append(str(r["text_value"])[:60])
+            if r.get("boolean_value") is not None: extra.append("✅" if r["boolean_value"] else "❌")
+            suffix = f"  ({' | '.join(extra)})" if extra else ""
+            lines.append(f"• {action_key} — {url}{suffix}  ({stamp})" if url else f"• {action_key}{suffix}  ({stamp})")
+        emb.add_field(name=f"{user_key} ({len(bucket)})", value=("\n".join(lines)[:1024] or "—"), inline=False)
+        count += 1
+        if count >= 25:
+            pages.append(emb)
+            emb, count = new_embed(), 0
+    if count or not pages:
+        pages.append(emb)
+    return pages
+
+
+
+def _iso_window(date_from: str | None, date_to: str | None) -> tuple[str | None, str | None]:
+    """Turn YYYY-MM-DD into inclusive ISO boundaries for lexicographic comparisons."""
+    df = f"{date_from}T00:00:00" if date_from else None
+    dt = f"{date_to}T23:59:59" if date_to else None
+    return df, dt
+
+def _resolve_event_key(session, value: str | None) -> str | None:
+    """
+    Accepts either an event key (shortcode) or an exact event name.
+    Returns the event_key or None if not found/None.
+    """
+    if not value:
+        return None
+
+    # Try key
+    ev = events_crud.get_event_by_key(session, value)
+    if ev:
+        return ev.event_key
+
+    # Try exact name
+    from db.schema import Event
+    by_name = session.query(Event).filter(Event.event_name == value).first()
+    return by_name.event_key if by_name else None
+
+
+
+def _make_report_pages(
+    rows: list[dict],
+    *,
+    title: str,
+    group_label: str = "By Action",
+) -> list[discord.Embed]:
+    """
+    Build paginated embeds grouped by action. One field per action group.
+    Splits across multiple embeds if >25 fields.
+    """
+    pages: list[discord.Embed] = []
+    grouped = _group_by_action(rows)
+    items = sorted(grouped.items(), key=lambda kv: kv[0])
+
+    def new_embed() -> discord.Embed:
+        return discord.Embed(title=title, color=discord.Color.green()).set_footer(text=group_label)
+
+    emb = new_embed()
+    fields_in_emb = 0
+
+    for action_key, bucket in items:
+        # Build the field body
+        # Example row line: • <@123> — https://fic.link  (2025-08-10 13:33)
+        # If URL missing, still show user + created time
+        lines: list[str] = []
+        for r in bucket:
+            stamp = str(r.get("created_at", ""))
+            who = f"<@{r['user_discord_id']}>" if r.get("user_discord_id") else r.get("display_name", "Unknown")
+            url = r.get("url")
+            extra_bits = []
+
+            # include light extra data if present
+            if r.get("numeric_value") is not None:
+                extra_bits.append(str(r["numeric_value"]))
+            if r.get("text_value"):
+                # avoid blowing the embed; trim small
+                extra_bits.append(r["text_value"][:60])
+            if r.get("boolean_value") is not None:
+                extra_bits.append("✅" if r["boolean_value"] else "❌")
+
+            suffix = f"  ({' | '.join(extra_bits)})" if extra_bits else ""
+            if url:
+                lines.append(f"• {who} — {url}{suffix}  ({stamp})")
+            else:
+                lines.append(f"• {who}{suffix}  ({stamp})")
+
+        val = "\n".join(lines) if lines else "—"
+        name = f"{action_key} ({len(bucket)})"
+        emb.add_field(name=name, value=val[:1024] or "—", inline=False)
+        fields_in_emb += 1
+
+        if fields_in_emb >= 25:
+            pages.append(emb)
+            emb = new_embed()
+            fields_in_emb = 0
+
+    if fields_in_emb > 0 or not pages:
+        pages.append(emb)
+    return pages
+
+
+class ReportResultsView(discord.ui.View):
+    """
+    Buttons: Post in channel, Export CSV, Toggle group (Action/User).
+    Holds raw rows so it can rebuild pages when toggling.
+    """
+    def __init__(self, *, rows: list[dict], title: str, csv_bytes: bytes, initial_group: str = "action"):
+        super().__init__(timeout=180)
+        self.rows = rows
+        self.title = title
+        self.csv_bytes = csv_bytes
+        self.group_mode = initial_group  # "action" | "user"
+        self.pages: list[discord.Embed] = self._build_pages()
+
+        # Initialize toggle button label to current opposite
+        self.group_toggle.label = "Group by: User" if self.group_mode == "action" else "Group by: Action"
+
+    def _build_pages(self) -> list[discord.Embed]:
+        if self.group_mode == "user":
+            return _make_report_pages_group_by_user(self.rows, title=self.title)
+        return _make_report_pages_group_by_action(self.rows, title=self.title)
+
+    async def on_timeout(self):
+        for c in self.children:
+            if hasattr(c, "disabled"):
+                c.disabled = True  # type: ignore[attr-defined]
+        # Can't reliably edit ephemeral after timeout; ignore.
+
+    @discord.ui.button(label="Post in this channel", style=discord.ButtonStyle.primary, row=0)
+    async def post_here(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Defer first to avoid 3s timeout
+        await interaction.response.defer(ephemeral=True, thinking=False)
+        max_pages = 3
+        for emb in self.pages[:max_pages]:
+            await interaction.channel.send(embed=emb)
+        if len(self.pages) > max_pages:
+            await interaction.channel.send(f"…and **{len(self.pages) - max_pages}** more page(s).")
+        await interaction.followup.send("✅ Posted.", ephemeral=True)
+
+    @discord.ui.button(label="Export CSV", style=discord.ButtonStyle.secondary, row=0)
+    async def export_csv(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True, thinking=False)
+        file = discord.File(BytesIO(self.csv_bytes), filename="actions_report.csv")
+        await interaction.followup.send(content="Here’s your CSV:", file=file, ephemeral=True)
+
+    @discord.ui.button(label="Group by: User", style=discord.ButtonStyle.secondary, row=1)
+    async def group_toggle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Quick edit; no need to defer
+        self.group_mode = "user" if self.group_mode == "action" else "action"
+        self.pages = self._build_pages()
+        button.label = "Group by: User" if self.group_mode == "action" else "Group by: Action"
+        # Update the ephemeral message with the first page
+        await interaction.response.edit_message(embed=self.pages[0], view=self)
+
+
 
 @dataclass
 class _EventRow:
@@ -192,9 +428,14 @@ class AdminEventPickerView(discord.ui.View):
                 "event_type": event.event_type
             }
 
+            # --- Actions: keep only ACTIVE actions ---
             action_events = action_events_crud.get_action_events_for_event(session, event.id)
             actions_data = []
             for ae in action_events:
+                # Hide deactivated actions (e.g., your old v1s)
+                if not (ae.action and getattr(ae.action, "is_active", False)):
+                    continue
+    
                 actions_data.append({
                     "action_key": ae.action.action_key if ae.action else None,
                     "variant": ae.variant,
@@ -202,19 +443,33 @@ class AdminEventPickerView(discord.ui.View):
                     "reward_event_key": ae.reward_event.reward_event_key if ae.reward_event else None,
                     "is_allowed_during_visible": ae.is_allowed_during_visible,
                     "is_self_reportable": ae.is_self_reportable,
-                    "input_help_text": ae.input_help_text
+                    "input_help_text": ae.input_help_text or None,
                 })
-
+    
+            # --- Rewards: add info about linked actions (for onaction availability) ---
             reward_events = reward_events_crud.get_all_reward_events_for_event(session, event.id)
             rewards_data = []
             for re in reward_events:
+                # Get the single ActionEvent (if any) that owns this reward_event
+                link = (
+                    session.query(ActionEvent.variant, Action.action_key)
+                    .outerjoin(Action, Action.id == ActionEvent.action_id)
+                    .filter(ActionEvent.reward_event_id == re.id)
+                    .first()
+                )
+                linked_variant, linked_key = (None, None)
+                if link:
+                    linked_variant, linked_key = link  # (variant, action_key)
+    
                 rewards_data.append({
                     "reward_name": re.reward.reward_name,
                     "reward_key": re.reward.reward_key if re.reward else None,
                     "price": re.price,
-                    "availability": re.availability
+                    "availability": re.availability,   # "inshop" | "onaction"
+                    "linked_action_key": linked_key,   # SINGLE
+                    "linked_variant": linked_variant,  # SINGLE
                 })
-
+            
         # Swap to dashboard
         dashboard = EventDashboardView(event_data, actions_data, rewards_data, self.guild_id)
         embed = build_event_embed(event_data, self.guild_id)
@@ -759,6 +1014,106 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
         await interaction.followup.send(f"✅ Event `{safe_event_name} ({shortcode})` status changed to **{new_status.value}**.")
 
+
+    # === REPORT COMMAND ===
+    @admin_or_mod_check()
+    @app_commands.describe(
+        event="Filter by event (shortcode OR exact name). Leave empty for all.",
+        date_from="Start date (YYYY-MM-DD, optional)",
+        date_to="End date (YYYY-MM-DD, optional)",
+        action_keys="Comma-separated action keys to include (optional)",
+        only_with_url="Only include entries that have a URL (default: True)",
+        only_active_actions="Show only ACTIVE actions (default: True)"   # <-- NEW
+    )
+    @app_commands.command(name="report", description="Report of completed user actions with filters (shareable list & CSV).")
+    async def report_actions(
+        self,
+        interaction: Interaction,
+        event: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        action_keys: Optional[str] = None,
+        only_with_url: Optional[bool] = True,
+        only_active_actions: Optional[bool] = True,   
+    ):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+    
+        # Parse date filters safely
+        df = safe_parse_date(date_from) if date_from else None
+        dt = safe_parse_date(date_to) if date_to else None
+        if date_from and not df:
+            await interaction.followup.send("❌ Invalid `date_from`. Use YYYY-MM-DD.")
+            return
+        if date_to and not dt:
+            await interaction.followup.send("❌ Invalid `date_to`. Use YYYY-MM-DD.")
+            return
+        df_iso, dt_iso = _iso_window(df, dt)
+    
+        # Parse action_keys
+        ak_list: list[str] = []
+        if action_keys:
+            ak_list = [a.strip().lower() for a in action_keys.split(",") if a.strip()]
+    
+        # Query
+        with db_session() as session:
+            # Accept event key OR event name
+            event_key = _resolve_event_key(session, event)
+    
+            rows = reports_crud.fetch_user_actions_report(
+                session,
+                event_key=event_key,
+                date_from_iso=df_iso,
+                date_to_iso=dt_iso,
+                action_keys=ak_list or None,
+                only_with_url=bool(only_with_url),
+                only_active_actions=bool(only_active_actions), 
+                limit=5000
+            )
+    
+        if not rows:
+            await interaction.followup.send("❌ No matching user actions found for those filters.")
+            return
+    
+        # Build CSV (unchanged above) -> csv_bytes
+        
+        title_bits = []
+        if event: title_bits.append(f"Event: **{event}**")
+        if df: title_bits.append(f"From: `{df}`")
+        if dt: title_bits.append(f"To: `{dt}`")
+        if ak_list: title_bits.append(f"Actions: `{', '.join(ak_list)}`")
+        if only_with_url: title_bits.append("Only URLs")
+        if only_active_actions: title_bits.append("Active actions only")
+            
+        title = "📊 User Actions Report" + (" — " + " • ".join(title_bits) if title_bits else "")
+        sio = StringIO()
+        writer = csv.writer(sio)
+        writer.writerow([
+            "event_key","event_name","action_key","variant","created_at",
+            "user_discord_id","display_name","url","numeric_value","text_value","boolean_value","date_value"
+        ])
+        for r in rows:
+            writer.writerow([
+                r.get("event_key",""),
+                r.get("event_name",""),
+                r.get("action_key",""),
+                r.get("variant",""),
+                r.get("created_at",""),
+                r.get("user_discord_id",""),
+                r.get("display_name",""),
+                r.get("url",""),
+                r.get("numeric_value",""),
+                r.get("text_value",""),
+                r.get("boolean_value",""),
+                r.get("date_value",""),
+            ])
+        csv_bytes = sio.getvalue().encode("utf-8")
+        # NEW: create the view with rows; it builds pages internally
+        view = ReportResultsView(rows=rows, title=title, csv_bytes=csv_bytes, initial_group="action")
+        
+        # Send first page + controls
+        await interaction.followup.send(embed=view.pages[0], view=view, ephemeral=True)
+        
+        
 
 # === Setup Function ===
 async def setup(bot):
