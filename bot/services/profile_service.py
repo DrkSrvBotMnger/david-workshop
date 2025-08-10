@@ -1,13 +1,18 @@
+# bot/services/profile_service.py
 from dataclasses import dataclass
 from typing import Optional
 import aiohttp
 from discord import File
 
+from bot.utils.discord_helpers import resolve_display_name
 from db.database import db_session
-from bot.crud import users_crud, inventory_crud
+
+# UI
 from bot.ui.renderers.badge_loader import extract_badge_icons
 from bot.ui.renderers.profile_card import generate_profile_card
-from bot.utils.discord_helpers import resolve_display_name
+
+# CRUD
+from bot.crud import users_crud, inventory_crud
 
 @dataclass
 class ProfileVM:
@@ -19,10 +24,12 @@ class ProfileVM:
     avatar_url: str
 
 def fetch_profile_vm(target_member) -> ProfileVM:
+    """Fetch a ProfileVM for a given member — DTO-only, no ORM rows returned."""
     with db_session() as dbs:
-        user = users_crud.get_or_create_user(dbs, target_member)
+        user = users_crud.get_or_create_user_dto(dbs, target_member)
+        display_name = resolve_display_name(user)
         return ProfileVM(
-            display_name=resolve_display_name(user),
+            display_name=display_name,
             points=user.points,
             total_earned=user.total_earned,
             title_text=inventory_crud.get_equipped_title_name(dbs, user.id),
@@ -31,6 +38,7 @@ def fetch_profile_vm(target_member) -> ProfileVM:
         )
 
 async def build_profile_file_and_name(vm: ProfileVM) -> tuple[File, str]:
+    """Generate a profile card image and return it as a File, along with the display name."""
     async with aiohttp.ClientSession() as http:
         badge_icons = await extract_badge_icons(vm.badge_emojis, session=http)
         async with http.get(vm.avatar_url) as resp:

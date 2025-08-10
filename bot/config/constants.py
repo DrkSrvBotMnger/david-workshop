@@ -4,7 +4,7 @@ import regex
 ALLOWED_ACTION_INPUT_FIELDS = [
     "url", "numeric_value", "text_value", "boolean_value", "date_value"
 ]
-SUPPORTED_FIELDS = {"url", "numeric_value", "text_value", "boolean_value", "date_value"}
+SUPPORTED_FIELDS = set(ALLOWED_ACTION_INPUT_FIELDS)
 
 # Pagination settings
 ACTIONS_PER_PAGE = 5
@@ -29,3 +29,6 @@ UNICODE_EMOJI = regex.compile(
     r"|\d\uFE0F\u20E3|[#*]\uFE0F\u20E3)$",
     flags=regex.VERSION1,
 )
+
+ # display limit on profile
+MAX_BADGES = 12 

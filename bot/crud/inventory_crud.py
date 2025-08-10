@@ -1,8 +1,11 @@
-from sqlalchemy import case, and_
-from typing import Optional, List
+from sqlalchemy.orm import Session
+from sqlalchemy import case, and_, func
+from typing import Optional, List, Iterable
+
 from db.schema import Inventory, Reward
 
-def _reward_type_order():
+def reward_type_order():
+    """Order rewards by type: title, badge, preset, other."""
     return case(
         (Reward.reward_type == "title", 0),
         (Reward.reward_type == "badge", 1),
@@ -32,12 +35,13 @@ def fetch_user_inventory_ordered(session, user_id: int) -> list[dict]:
         )
         .join(Reward, Reward.id == Inventory.reward_id)
         .filter(Inventory.user_id == user_id)
-        .order_by(_reward_type_order(), Reward.reward_name.asc())
+        .order_by(reward_type_order(), Reward.reward_name.asc())
         .all()
     )
     return [dict(r._asdict()) for r in rows]
 
 def get_equipped_title_name(session, user_id: int) -> Optional[str]:
+    """Returns the name of the equipped title, or None if no title is equipped."""
     row = (
         session.query(Reward.reward_name)
         .join(Inventory, Inventory.reward_id == Reward.id)
@@ -53,6 +57,7 @@ def get_equipped_title_name(session, user_id: int) -> Optional[str]:
     return row[0] if row else None
 
 def get_equipped_badge_emojis(session, user_id: int) -> List[str]:
+    """Returns a list of emojis for equipped badges, or an empty list if no badges are equipped."""
     rows = (
         session.query(Reward.emoji)
         .join(Inventory, Inventory.reward_id == Reward.id)
@@ -67,3 +72,64 @@ def get_equipped_badge_emojis(session, user_id: int) -> List[str]:
     )
     # keep only non-empty
     return [str(emoji) for (emoji,) in rows if emoji]
+
+def fetch_user_titles_for_equip(session, user_id: int):
+    """Returns [(reward_key, reward_name, is_equipped)]"""
+    rows = (
+        session.query(Reward.reward_key, Reward.reward_name, Inventory.is_equipped)
+        .join(Inventory, Inventory.reward_id == Reward.id)
+        .filter(Inventory.user_id == user_id, Reward.reward_type == "title")
+        .order_by(func.lower(Reward.reward_name).asc())
+        .all()
+    )
+    return rows
+
+def fetch_user_badges_for_equip(session, user_id: int):
+    """Returns [(reward_key, reward_name, emoji, is_equipped)]"""
+    rows = (
+        session.query(Reward.reward_key, Reward.reward_name, Reward.emoji, Inventory.is_equipped)
+        .join(Inventory, Inventory.reward_id == Reward.id)
+        .filter(Inventory.user_id == user_id, Reward.reward_type == "badge")
+        .order_by(func.lower(Reward.reward_name).asc())
+        .all()
+    )
+    return rows
+
+def set_titles_equipped(session: Session, user_id: int, selected_key: Optional[str]) -> int:
+    """
+    Equip exactly one title for user (or none if selected_key is None).
+    Returns number of rows updated.
+    """
+    items = (
+        session.query(Inventory).join(Reward, Reward.id == Inventory.reward_id)
+        .filter(Inventory.user_id == user_id, Reward.reward_type == "title")
+        .all()
+    )
+    updated = 0
+    for it in items:
+        new_val = (it.reward.reward_key == selected_key) if selected_key else False
+        if it.is_equipped != new_val:
+            it.is_equipped = new_val
+            updated += 1
+    session.flush()
+    return updated
+
+def set_badges_equipped(session: Session, user_id: int, selected_keys: Iterable[str]) -> int:
+    """
+    Equip badges by reward_key (multiple). Non-selected become unequipped.
+    Returns number of rows updated.
+    """
+    selected = set(selected_keys)
+    items = (
+        session.query(Inventory).join(Reward, Reward.id == Inventory.reward_id)
+        .filter(Inventory.user_id == user_id, Reward.reward_type == "badge")
+        .all()
+    )
+    updated = 0
+    for it in items:
+        new_val = it.reward.reward_key in selected
+        if it.is_equipped != new_val:
+            it.is_equipped = new_val
+            updated += 1
+    session.flush()
+    return updated

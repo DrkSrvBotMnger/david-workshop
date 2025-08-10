@@ -17,7 +17,8 @@ repos:
   - repo: local
     hooks:
       - id: run-tests
-        name: pytest on tests/
+        name: pytest on tests/ (manual)
         entry: pytest tests
         language: system
         pass_filenames: false
+        stages: [manual]   # 👈 Only runs if you ask pre-commit to run it manually

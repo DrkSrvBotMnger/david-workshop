@@ -4,7 +4,6 @@ from PIL import Image
 from typing import List, Union
 from bot.utils.emoji import is_custom_emoji, emoji_to_codepoint
 
-
 async def extract_badge_icons(emojis: List[str], session: aiohttp.ClientSession) -> List[Union[Image.Image, str]]:
     """
     Given a list of emoji strings (custom or unicode),

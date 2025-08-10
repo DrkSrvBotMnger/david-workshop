@@ -1,11 +1,41 @@
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
-from bot.crud import general_crud
 from bot.utils.time_parse_paginate import now_iso
 from db.schema import User, Action, UserAction, ActionEvent
 import discord
-from discord import app_commands, File, Interaction, Embed, User as DiscordUser, SelectOption
+from bot.domain.dto import UserDTO
+from bot.domain.mapping import user_to_dto
+
+def get_or_create_user_dto(session, member: discord.Member) -> UserDTO:
+
+    discord_id=str(member.id)
+    user = get_user_by_discord_id(session, discord_id)
+    if user:
+    
+        user_data={
+            "username": member.name,
+            "display_name": member.global_name,
+            "nickname": member.nick
+        }
+        for key, value in user_data.items():
+            setattr(user, key, value)
+    
+        user.modified_at=now_iso()
+        session.flush()
+        return user_to_dto(user)
+    
+    user_data={
+        "username": member.name,
+        "display_name": member.global_name,
+        "nickname": member.nick
+    }
+    user = User(**user_data, user_discord_id=discord_id, created_at=now_iso())    
+    session.add(user)
+    session.flush()
+    return user_to_dto(user)
+
+
 
 # --- GET ---
 def get_user_by_discord_id(

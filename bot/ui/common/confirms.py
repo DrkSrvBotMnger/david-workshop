@@ -3,9 +3,7 @@ from discord import ui
 from typing import Optional
 
 class ConfirmActionView(ui.View):
-    """
-    Simple yes/no confirm view. Set .message after sending to enable timeout edits.
-    """
+    """Simple yes/no confirm view. Set .message after sending to enable timeout edits."""
     def __init__(self, timeout: int = 30):
         super().__init__(timeout=timeout)
         self.confirmed: Optional[bool] = None
@@ -33,12 +31,11 @@ class ConfirmActionView(ui.View):
         await interaction.response.defer()
         self.stop()
 
-
 async def confirm_action(
     interaction: discord.Interaction,
     item_name: str,
     item_action: str,
-    reason: str | None = None,
+    reason: str | None = None
 ) -> bool:
     """
     Generic confirmation dialog.

@@ -2,14 +2,11 @@ import discord
 from discord import Message
 from typing import Optional
 
-
-## User display name helper to always show the most relevant name
 def resolve_display_name(user_row) -> str:
+    """Returns the most relevant display name for a user."""
     # user_row is db.schema.User
     return user_row.nickname or user_row.display_name or user_row.username
 
-
-## Announcement messages
 async def post_announcement_message(
     interaction: discord.Interaction, 
     announcement_channel_id: str,

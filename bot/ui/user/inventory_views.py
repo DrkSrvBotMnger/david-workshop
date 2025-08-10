@@ -2,25 +2,37 @@ import discord
 from typing import Iterable, Awaitable, Callable, Optional
 
 class InventoryView(discord.ui.View):
+    """
+    Inventory view. Receives a list of items to display.
+    """
     def __init__(
         self,
         viewer: discord.abc.User | discord.Member,
         items: Iterable[dict],
-        on_back_to_profile: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
+        on_view_profile: Optional[Callable[[discord.Interaction], Awaitable[None]]] = None,
         display_name: Optional[str] = None,
+        *,
+        author_id: int,  
     ):
         super().__init__(timeout=120)
         self.viewer = viewer
         self.items = list(items)
-        self._on_back = on_back_to_profile
+        self._on_view = on_view_profile
         self.display_name = display_name
+        self.author_id = author_id
 
-        if self._on_back:
-            btn = discord.ui.Button(label="← Back to Profile", style=discord.ButtonStyle.secondary, custom_id="inventory:back_profile")
-            async def _go_back(inter: discord.Interaction):
-                await self._on_back(inter)
-            btn.callback = _go_back
+        if self._on_view:
+            btn = discord.ui.Button(label="View Profile", style=discord.ButtonStyle.primary, custom_id="inventory:view_profile")
+            async def _go_view(inter: discord.Interaction):
+                await self._on_view(inter)
+            btn.callback = _go_view
             self.add_item(btn)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("This inventory panel isn’t yours.", ephemeral=True)
+            return False
+        return True
 
     @staticmethod
     def _equipped_suffix(is_equipped: bool, rtype: str) -> str:

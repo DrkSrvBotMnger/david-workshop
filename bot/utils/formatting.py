@@ -1,16 +1,13 @@
 from typing import Optional
 from datetime import datetime, timezone
 
-
 def now_iso() -> str:
     """Current UTC time in ISO 8601 format with timezone offset."""
     return datetime.now(timezone.utc).isoformat()
 
-
 def now_unix() -> int:
     """Current UTC time as Unix timestamp (int)."""
     return int(datetime.now(timezone.utc).timestamp())
-
 
 def format_discord_timestamp(iso_str: str, style: str = "F") -> str:
     """
@@ -24,13 +21,12 @@ def format_discord_timestamp(iso_str: str, style: str = "F") -> str:
     except Exception:
         return iso_str
 
-
 def format_log_entry(
     log_action: str,
     performed_by: str,
     performed_at: str,
     log_description: Optional[str] = None,
-    label: Optional[str] = None,
+    label: Optional[str] = None
 ) -> str:
     """
     Format a generic log entry for display in embeds or paginated lists.

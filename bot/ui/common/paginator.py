@@ -69,11 +69,8 @@ class EmbedPaginator(View):
             self.current_page = last
             await self._apply_state(interaction)
 
-
 async def paginate_embeds(interaction: discord.Interaction, embeds: list[discord.Embed], ephemeral: bool = True):
-    """
-    Convenience helper to send a paginated embed message.
-    """
+    """Convenience helper to send a paginated embed message."""
     if not embeds:
         await interaction.followup.send("❌ No data to display.", ephemeral=True)
         return

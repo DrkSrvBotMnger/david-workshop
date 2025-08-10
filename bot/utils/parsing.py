@@ -2,8 +2,6 @@ import json
 from typing import Optional
 from bot.config import SUPPORTED_FIELDS
 
-
-# Parse common date strings into YYYY-MM-DD format
 def safe_parse_date(date_str: str) -> Optional[str]:
     """Attempts to parse a date string into YYYY-MM-DD. Returns None if invalid."""
     from datetime import datetime
@@ -16,10 +14,8 @@ def safe_parse_date(date_str: str) -> Optional[str]:
             continue
     return None
 
-
-# Supported fields for Action definitions
 def parse_required_fields(input_fields_json: Optional[str]) -> list[str]:
-    """Return ordered list of required fields (subset of SUPPORTED_FIELDS)."""
+    """Return ordered list of required fields Action definitions (subset of SUPPORTED_FIELDS)."""
     if not input_fields_json:
         return []
     try:
@@ -33,8 +29,6 @@ def parse_required_fields(input_fields_json: Optional[str]) -> list[str]:
             out.append(name)
     return out
 
-
-# Parse help texts for ActionEvent
 def parse_help_texts(input_help_text: Optional[str], fields: list[str]) -> dict[str, str]:
     """
     Turn the ActionEvent.input_help_text JSON (a list) into a dict:
@@ -62,7 +56,6 @@ def parse_help_texts(input_help_text: Optional[str], fields: list[str]) -> dict[
         else:
             result[fname] = ""
     return result
-
 
 def parse_message_link(message_link: str) -> tuple[int, int]:
     """

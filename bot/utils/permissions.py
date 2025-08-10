@@ -2,7 +2,6 @@ import discord
 from discord import app_commands, Interaction
 from bot.config import MOD_ROLE_IDS
 
-
 async def is_admin_or_mod(interaction: Interaction) -> bool:
     """True if invoker is admin or has any role in MOD_ROLE_IDS."""
     try:
@@ -16,7 +15,6 @@ async def is_admin_or_mod(interaction: Interaction) -> bool:
         member.guild_permissions.administrator
         or any(role.id in MOD_ROLE_IDS for role in member.roles)
     )
-
 
 def admin_or_mod_check():
     """Decorator for app commands that require admin or mod."""
