@@ -1,0 +1,226 @@
+/profile:
+  cog: bot.cogs.user.profile_cog
+
+  callbacks:
+    - _open_inventory:
+        services:
+          - users_service.get_or_create_user_dto
+          - profile_service.fetch_profile_vm
+          - profile_service.build_profile_file_and_name
+        crud:
+          - inventory_crud.fetch_user_inventory_ordered
+        utils:
+          - discord_helpers.resolve_display_name
+        ui:
+          - user.profile_views.ProfileView
+          - user.inventory_views.InventoryView
+
+    - _open_equip_title:
+        services:
+          - users_service.get_or_create_user_dto
+          - profile_service.fetch_profile_vm
+          - equip_service.get_title_select_options
+          - profile_service.build_profile_file_and_name
+        crud:
+          - inventory_crud.set_titles_equipped
+        ui:
+          - user.equip_title_view.EquipTitleView
+
+    - _open_equip_badges:
+        services:
+          - users_service.get_or_create_user_dto
+          - profile_service.fetch_profile_vm
+          - equip_service.get_badge_select_options
+          - profile_service.build_profile_file_and_name
+        crud:
+          - inventory_crud.fetch_user_badges_for_equip
+          - inventory_crud.set_badges_equipped
+        ui:
+          - user.equip_badge_view.EquipBadgeView
+
+  services:
+    - users_service.get_or_create_user_dto:
+        crud:
+          - users_crud.get_or_create_user   # <- fixed name
+        returns:
+          - UserDTO
+
+    - profile_service.fetch_profile_vm:
+        services:
+          - users_service.get_or_create_user_dto
+        crud:
+          - inventory_crud.get_equipped_title_name
+          - inventory_crud.get_equipped_badge_emojis
+        utils:
+          - discord_helpers.resolve_display_name
+        dto:
+          - ProfileVM
+
+    - profile_service.build_profile_file_and_name:
+        renderers:
+          - renderers.badge_loader.extract_badge_icons
+          - renderers.profile_card.generate_profile_card
+        utils:
+          - emoji.is_custom_emoji (CUSTOM_DISCORD_EMOJI)
+          - emoji.emoji_to_codepoint
+        returns:
+          - (file, display_name)
+
+  ui:
+    views:
+      - user.profile_views.ProfileView
+      - user.inventory_views.InventoryView
+      - user.equip_title_view.EquipTitleView
+      - user.equip_badge_view.EquipBadgeView
+
+
+/inventory:
+  cog: bot.cogs.user.profile_cog
+
+  callbacks:
+    - _open_inventory:
+        services:
+          - users_service.get_or_create_user_dto
+          - inventory_service.fetch_inventory_for_member
+          - inventory_service.get_user_publishables_for_preview
+          - profile_service.build_profile_file_and_name   
+        crud:
+          - inventory_crud.fetch_user_inventory_ordered
+        utils:
+          - discord_helpers.resolve_display_name
+        ui:
+          - user.inventory_views.InventoryView
+          - user.inventory_views.PresetPreviewView
+          - user.profile_views.ProfileView
+         
+  services:
+    - users_service.get_or_create_user_dto:
+        crud:
+          - users_crud.get_or_create_user
+        returns:
+          - UserDTO
+
+    - inventory_service.fetch_inventory_for_member:
+        services:
+          - users_service.get_or_create_user_dto
+        crud:
+          - inventory_crud.fetch_user_inventory_ordered
+        returns:
+          - (db_user_row_or_dto, items)
+
+    - profile_service.build_profile_file_and_name:
+        renderers:
+          - renderers.badge_loader.extract_badge_icons
+          - renderers.profile_card.generate_profile_card
+        utils:
+          - emoji.is_custom_emoji (CUSTOM_DISCORD_EMOJI)
+          - emoji.emoji_to_codepoint
+        returns:
+          - (file, display_name)
+
+  ui:
+    views:
+      - user.inventory_views.InventoryView
+      - user.profile_views.ProfileView
+
+
+/equip_badge:
+  cog: bot.cogs.user.profile_cog
+
+  constants:
+    - MAX_BADGES (bot.config.constants)
+
+  callbacks:
+    - _open_equip_badges:
+        services:
+          - users_service.get_or_create_user_dto
+          - profile_service.fetch_profile_file_and_name?   # if you refresh preview; else drop
+          - equip_service.get_badge_select_options
+        crud:
+          - inventory_crud.fetch_user_badges_for_equip     # if options are built in service, omit here
+        ui:
+          - user.equip_badge_view.EquipBadgeView
+
+    - (within EquipBadgeView action):
+        services: []
+        crud:
+          - inventory_crud.set_badges_equipped
+        ui: []
+
+  services:
+    - users_service.get_or_create_user_dto:
+        crud:
+          - users_crud.get_or_create_user
+        returns:
+          - UserDTO
+
+    - equip_service.get_badge_select_options:
+        services:
+          - users_service.get_or_create_user_dto
+        crud:
+          - inventory_crud.fetch_user_badges_for_equip
+        returns:
+          - (user_id, List[discord.SelectOption])
+
+    - profile_service.build_profile_file_and_name:   # include only if you re-render the card after equip
+        renderers:
+          - renderers.badge_loader.extract_badge_icons
+          - renderers.profile_card.generate_profile_card
+        utils:
+          - emoji.is_custom_emoji (CUSTOM_DISCORD_EMOJI)
+          - emoji.emoji_to_codepoint
+        returns:
+          - (file, display_name)
+
+  ui:
+    views:
+      - user.equip_badge_view.EquipBadgeView
+
+
+/equip_title:
+  cog: bot.cogs.user.profile_cog
+
+  callbacks:
+    - _open_equip_title:
+        services:
+          - users_service.get_or_create_user_dto
+          - profile_service.build_profile_file_and_name?   # if you refresh preview; else drop
+          - equip_service.get_title_select_options
+        crud: []
+        ui:
+          - user.equip_title_view.EquipTitleView
+
+    - (within EquipTitleView action):
+        services: []
+        crud:
+          - inventory_crud.set_titles_equipped
+        ui: []
+
+  services:
+    - users_service.get_or_create_user_dto:
+        crud:
+          - users_crud.get_or_create_user
+        returns:
+          - UserDTO
+
+    - equip_service.get_title_select_options:
+        services:
+          - users_service.get_or_create_user_dto
+        crud:
+          - inventory_crud.fetch_user_titles_for_equip
+        returns:
+          - (user_id, List[discord.SelectOption])
+
+    - profile_service.build_profile_file_and_name:   # include only if you re-render the card after equip
+        renderers:
+          - renderers.badge_loader.extract_badge_icons
+          - renderers.profile_card.generate_profile_card
+        utils:
+          - emoji.is_custom_emoji (CUSTOM_DISCORD_EMOJI)
+          - emoji.emoji_to_codepoint
+        returns:
+          - (file, display_name)
+
+  ui:
+    views:
+      - user.equip_title_view.EquipTitleView

@@ -1,5 +1,110 @@
 import discord
-from typing import Iterable, Awaitable, Callable, Optional
+from typing import Iterable, Awaitable, Callable, Optional, Dict, Tuple
+
+class PresetPreviewButton(discord.ui.Button):
+    def __init__(self, owner_id: int, preset_map: dict[str, tuple[str, str, str]]):
+        super().__init__(style=discord.ButtonStyle.secondary, label="Preview publishables")
+        self.owner_id = owner_id
+        self.preset_map = preset_map
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message(
+                "❌ Only the inventory owner can open previews.", ephemeral=True
+            )
+            return
+        view = PresetPreviewView(owner_id=self.owner_id, preset_map=self.preset_map)
+        try:
+            await interaction.response.send_message(
+                "🎛️ **Choose an item to preview:**",
+                view=view,
+                ephemeral=True
+            )
+        except discord.InteractionResponded:
+            # If something already responded, fall back to followup (still ephemeral)
+            await interaction.followup.send(
+                "🎛️ **Choose an item to preview:**",
+                view=view,
+                ephemeral=True
+            )
+
+class PresetPreviewView(discord.ui.View):
+    def __init__(self, owner_id: int, preset_map: Dict[str, Tuple[str, str, str]]):
+        super().__init__(timeout=180)
+        self.owner_id = owner_id
+        self.preset_map = preset_map
+        self.add_item(PresetSelect(self.preset_map))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.owner_id:
+            await interaction.response.send_message(
+                "❌ Only the inventory owner can use this.", ephemeral=True
+            )
+            return False
+        return True
+
+class PresetSelect(discord.ui.Select):
+    def __init__(self, preset_map: Dict[str, Tuple[str, str, str]]):
+        self.preset_map = preset_map
+        options = [
+            discord.SelectOption(label=meta[2][:100] or "Publishable", value=val[:100])
+            for (val, meta) in preset_map.items()
+        ]
+        super().__init__(placeholder="Select…", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        # This is the EPHEMERAL message we just sent above
+        ephemeral_msg_id = interaction.message.id
+    
+        await interaction.response.defer(ephemeral=True)
+    
+        chosen = self.values[0]
+        ch, msg, _ = self.preset_map.get(chosen, (None, None, None))
+        if not (ch and msg):
+            await interaction.followup.edit_message(
+                message_id=ephemeral_msg_id,
+                content="⚠️ Missing source message.",
+                embeds=[],
+                attachments=[],
+                view=self.view
+            )
+            return
+    
+        try:
+            channel = interaction.guild.get_channel(int(ch)) or await interaction.client.fetch_channel(int(ch))
+            src_msg = await channel.fetch_message(int(msg))
+        except Exception:
+            await interaction.followup.edit_message(
+                message_id=ephemeral_msg_id,
+                content="⚠️ Could not fetch (permissions or deleted).",
+                embeds=[],
+                attachments=[],
+                view=self.view
+            )
+            return
+    
+        content = src_msg.content or None
+        embeds = src_msg.embeds[:10] if src_msg.embeds else []
+    
+        files = []
+        try:
+            for a in src_msg.attachments:
+                if (a.content_type and a.content_type.startswith("image/")) or a.filename.lower().endswith(
+                    (".png", ".jpg", ".jpeg", ".gif", ".webp")
+                ):
+                    if len(files) >= 10:
+                        break
+                    files.append(await a.to_file())
+        except Exception:
+            files = []
+    
+        await interaction.followup.edit_message(
+            message_id=ephemeral_msg_id,
+            content=content,
+            embeds=embeds,
+            attachments=files,
+            view=self.view
+        )
 
 class InventoryView(discord.ui.View):
     """
@@ -13,6 +118,7 @@ class InventoryView(discord.ui.View):
         display_name: Optional[str] = None,
         *,
         author_id: int,  
+        publishables: dict[str, tuple[str, str, str]] | None = None, 
     ):
         super().__init__(timeout=120)
         self.viewer = viewer
@@ -20,6 +126,8 @@ class InventoryView(discord.ui.View):
         self._on_view = on_view_profile
         self.display_name = display_name
         self.author_id = author_id
+        if publishables: 
+            self.add_item(PresetPreviewButton(owner_id=self.viewer.id, preset_map=publishables))
 
         if self._on_view:
             btn = discord.ui.Button(label="View Profile", style=discord.ButtonStyle.primary, custom_id="inventory:view_profile")

@@ -17,9 +17,16 @@ def fetch_user_inventory_ordered(session, user_id: int) -> list[dict]:
     """
     Returns rows shaped for UI:
     {
-      "inv_id": int, "is_equipped": bool,
-      "reward_id": int, "reward_key": str, "reward_type": str,
-      "reward_name": str, "reward_description": str | None, "emoji": str | None,
+      "inv_id": int, 
+      "is_equipped": bool,
+      "reward_id": int, 
+      "reward_key": str, 
+      "reward_type": str,
+      "reward_name": str, 
+      "reward_description": str | None, 
+      "emoji": str | None,
+      "preset_channel_discord_id": str | None,
+      "preset_message_discord_id": str | None,
     }
     """
     rows = (
@@ -32,6 +39,8 @@ def fetch_user_inventory_ordered(session, user_id: int) -> list[dict]:
             Reward.reward_name,
             Reward.reward_description,
             Reward.emoji,
+            Reward.use_channel_discord_id,
+            Reward.use_message_discord_id,
         )
         .join(Reward, Reward.id == Inventory.reward_id)
         .filter(Inventory.user_id == user_id)

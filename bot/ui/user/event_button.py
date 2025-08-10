@@ -5,11 +5,6 @@ from bot.crud import events_crud
 from discord import app_commands, File, Interaction, Embed, User as DiscordUser, SelectOption
 from db.schema import Event
 
-
-
-
-
-
 class EventSelect(discord.ui.Select):
     def __init__(self, options_data: list[dict]):
         opts = [
@@ -108,10 +103,10 @@ class EventButtons(discord.ui.View):
             url=ticket_url
         ))
 
-    @discord.ui.button(label="✅ Join Event", style=discord.ButtonStyle.success)
-    async def join_event(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            f"✅ You have joined the event `{self.event_name} ({self.event_key})`!\n"
-            "(Feature coming soon: auto log your participation.)",
-            ephemeral=True
-        )
+    #@discord.ui.button(label="✅ Join Event", style=discord.ButtonStyle.success)
+    #async def join_event(self, interaction: discord.Interaction, button: discord.ui.Button):
+    #    await interaction.response.send_message(
+    #        f"✅ You have joined the event `{self.event_name} ({self.event_key})`!\n"
+    #        "(Feature coming soon: auto log your participation.)",
+    #        ephemeral=True
+    #    )

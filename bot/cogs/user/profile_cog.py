@@ -11,7 +11,6 @@ from db.schema import EventStatus, Inventory, Reward, User, Event
 
 # UI
 from bot.ui.user.profile_views import ProfileView
-
 from bot.ui.user.inventory_views import InventoryView
 from bot.ui.user.event_button import EventSelectView
 from bot.ui.user.equip_badge_view import EquipBadgeView
@@ -21,6 +20,7 @@ from bot.ui.user.equip_title_view import EquipTitleView
 from bot.services.users_service import get_or_create_user_dto
 from bot.services.profile_service import fetch_profile_vm, build_profile_file_and_name
 from bot.services.equip_service import get_title_select_options, get_badge_select_options
+from bot.services.inventory_service import get_user_publishables_for_preview
 
 # CRUD
 from bot.crud.inventory_crud import fetch_user_inventory_ordered
@@ -36,6 +36,7 @@ class ProfileCog(commands.Cog):
             user = get_or_create_user_dto(s, target)
             items = fetch_user_inventory_ordered(s, user.id)
             display_name = resolve_display_name(user)
+            publishables = get_user_publishables_for_preview(s, user.id)
 
         async def _view_profile(cb_inter: discord.Interaction):
             vm = fetch_profile_vm(target)
@@ -55,7 +56,8 @@ class ProfileCog(commands.Cog):
             items=items,
             on_view_profile=_view_profile,    
             display_name=display_name,
-            author_id=inter.user.id,          
+            author_id=inter.user.id,   
+            publishables=publishables,        
         )
         await inter.response.edit_message(embed=inv_view.build_embed(), view=inv_view, attachments=[])
 
@@ -137,12 +139,11 @@ class ProfileCog(commands.Cog):
     @app_commands.command(name="inventory", description="Show your (or another member's) inventory")
     @app_commands.describe(member="Whose inventory to view (optional)")
     async def inventory(self, interaction: Interaction, member: discord.Member | None = None):
-        """
-        Standalone inventory command. Also offers a Back-to-Profile button.
-        """
         target = member or interaction.user
+
         with db_session() as s:
-            user = get_or_create_user_dto(s, target)
+            user = get_or_create_user_dto(s, target)                 # DB user DTO
+            publishables = get_user_publishables_for_preview(s, user.id)  # DB id (FIX)
             items = fetch_user_inventory_ordered(s, user.id)
             display_name = resolve_display_name(user)
 
@@ -154,8 +155,8 @@ class ProfileCog(commands.Cog):
                 on_open_inventory=lambda i: self._open_inventory(i, target),
                 on_equip_title=self._open_equip_title,
                 on_equip_badges=self._open_equip_badges,
-                author_id=cb_inter.user.id,        # <<< NEW
-                enable_equip=is_owner,             # <<< NEW
+                author_id=cb_inter.user.id,
+                enable_equip=is_owner,
             )
             await cb_inter.response.edit_message(attachments=[file], view=view, embed=None)
 
@@ -164,9 +165,15 @@ class ProfileCog(commands.Cog):
             items=items,
             on_view_profile=_back,
             display_name=display_name,
-            author_id=interaction.user.id    
+            author_id=interaction.user.id,
+            publishables=publishables, 
         )
-        await interaction.response.send_message(embed=view.build_embed(), view=view, ephemeral=True)
+
+        await interaction.response.send_message(
+            embed=view.build_embed(),
+            view=view,
+            ephemeral=True
+        )
 
     # === EQUIP BADGE COMMAND ===
     @app_commands.command(name="equip_badge", description=f"Select up to {MAX_BADGES} badges to display on your profile.")
