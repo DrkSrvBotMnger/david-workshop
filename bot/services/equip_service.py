@@ -3,8 +3,10 @@ from typing import Tuple, List
 
 from db.database import db_session
 
+# SERVICES
+from bot.services.users_service import get_or_create_user_dto
+
 # CRUD
-from bot.crud.users_crud import get_or_create_user_dto
 from bot.crud.inventory_crud import fetch_user_titles_for_equip, fetch_user_badges_for_equip
 
 def get_title_select_options(member: discord.abc.User | discord.Member) -> Tuple[int, List[discord.SelectOption]]:

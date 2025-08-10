@@ -3,77 +3,54 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from bot.utils.time_parse_paginate import now_iso
 from db.schema import User, Action, UserAction, ActionEvent
-import discord
-from bot.domain.dto import UserDTO
-from bot.domain.mapping import user_to_dto
 
-def get_or_create_user_dto(session, member: discord.Member) -> UserDTO:
+def get_user_by_discord_id(session: Session, user_discord_id: str) -> User | None:
+    return (
+        session.query(User)
+        .filter(User.user_discord_id == user_discord_id)
+        .first()
+    )
 
-    discord_id=str(member.id)
-    user = get_user_by_discord_id(session, discord_id)
-    if user:
-    
-        user_data={
-            "username": member.name,
-            "display_name": member.global_name,
-            "nickname": member.nick
-        }
-        for key, value in user_data.items():
-            setattr(user, key, value)
-    
-        user.modified_at=now_iso()
-        session.flush()
-        return user_to_dto(user)
-    
-    user_data={
-        "username": member.name,
-        "display_name": member.global_name,
-        "nickname": member.nick
-    }
-    user = User(**user_data, user_discord_id=discord_id, created_at=now_iso())    
+def create_user_from_member(session: Session, member) -> User:
+    user = User(
+        user_discord_id=str(member.id),
+        username=member.name,
+        display_name=getattr(member, "display_name", None) or getattr(member, "global_name", None) or member.name,
+        nickname=getattr(member, "nick", None),
+        points=0,
+        total_earned=0,
+        total_spent=0,
+        created_at=now_iso(),
+        modified_at=None,
+    )
     session.add(user)
-    session.flush()
-    return user_to_dto(user)
+    session.flush()  # ensures user.id
+    return user
 
+def update_user_identity_if_changed(session: Session, user: User, member) -> bool:
+    changed = False
+    new_username = member.name
+    new_display  = getattr(member, "display_name", None) or getattr(member, "global_name", None) or member.name
+    new_nick     = getattr(member, "nick", None)
 
+    if user.username != new_username:
+        user.username = new_username; changed = True
+    if user.display_name != new_display:
+        user.display_name = new_display; changed = True
+    if user.nickname != new_nick:
+        user.nickname = new_nick; changed = True
 
-# --- GET ---
-def get_user_by_discord_id(
-    session: Session, 
-    user_discord_id: str
-) -> Optional[User]:
-    """Retrieve a user by its discord id."""
-    
-    return session.query(User).filter_by(user_discord_id=user_discord_id).first()
-
-
-# --- CREATE ---
-def get_or_create_user(session, member: discord.Member) -> User:
-
-    discord_id=str(member.id)
-    user = get_user_by_discord_id(session, discord_id)
-    if user:
-
-        user_data={
-            "username": member.name,
-            "display_name": member.global_name,
-            "nickname": member.nick
-        }
-        for key, value in user_data.items():
-            setattr(user, key, value)
-
-        user.modified_at=now_iso()
+    if changed:
+        user.modified_at = now_iso()
         session.flush()
-        return user
+    return changed
 
-    user_data={
-        "username": member.name,
-        "display_name": member.global_name,
-        "nickname": member.nick
-    }
-    user = User(**user_data, user_discord_id=discord_id, created_at=now_iso())    
-    session.add(user)
-    session.flush()
+def get_or_create_user(session: Session, member) -> User:
+    user = get_user_by_discord_id(session, str(member.id))
+    if not user:
+        user = create_user_from_member(session, member)
+    else:
+        update_user_identity_if_changed(session, user, member)
     return user
 
 

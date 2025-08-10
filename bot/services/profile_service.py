@@ -1,4 +1,3 @@
-# bot/services/profile_service.py
 from dataclasses import dataclass
 from typing import Optional
 import aiohttp
@@ -11,8 +10,11 @@ from db.database import db_session
 from bot.ui.renderers.badge_loader import extract_badge_icons
 from bot.ui.renderers.profile_card import generate_profile_card
 
+# SERVICES
+from bot.services.users_service import get_or_create_user_dto
+
 # CRUD
-from bot.crud import users_crud, inventory_crud
+from bot.crud.inventory_crud import get_equipped_title_name, get_equipped_badge_emojis
 
 @dataclass
 class ProfileVM:
@@ -26,14 +28,14 @@ class ProfileVM:
 def fetch_profile_vm(target_member) -> ProfileVM:
     """Fetch a ProfileVM for a given member — DTO-only, no ORM rows returned."""
     with db_session() as dbs:
-        user = users_crud.get_or_create_user_dto(dbs, target_member)
+        user = get_or_create_user_dto(dbs, target_member)
         display_name = resolve_display_name(user)
         return ProfileVM(
             display_name=display_name,
             points=user.points,
             total_earned=user.total_earned,
-            title_text=inventory_crud.get_equipped_title_name(dbs, user.id),
-            badge_emojis=inventory_crud.get_equipped_badge_emojis(dbs, user.id),
+            title_text=get_equipped_title_name(dbs, user.id),
+            badge_emojis=get_equipped_badge_emojis(dbs, user.id),
             avatar_url=target_member.display_avatar.url,
         )
 

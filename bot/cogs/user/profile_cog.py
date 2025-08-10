@@ -18,11 +18,11 @@ from bot.ui.user.equip_badge_view import EquipBadgeView
 from bot.ui.user.equip_title_view import EquipTitleView
 
 # Services
+from bot.services.users_service import get_or_create_user_dto
 from bot.services.profile_service import fetch_profile_vm, build_profile_file_and_name
 from bot.services.equip_service import get_title_select_options, get_badge_select_options
 
 # CRUD
-from bot.crud.users_crud import get_or_create_user_dto
 from bot.crud.inventory_crud import fetch_user_inventory_ordered
 
 class ProfileCog(commands.Cog):
@@ -59,7 +59,6 @@ class ProfileCog(commands.Cog):
         )
         await inter.response.edit_message(embed=inv_view.build_embed(), view=inv_view, attachments=[])
 
-
     async def _open_equip_title(self, inter: discord.Interaction):
         
         origin_msg = inter.message
@@ -79,7 +78,12 @@ class ProfileCog(commands.Cog):
             await origin_msg.edit(attachments=[file], embed=None, view=view)
 
         user_db_id, options = get_title_select_options(inter.user)
-        view = EquipTitleView(user_db_id, options, author_id=panel_author_id, on_refresh_profile=refresh_profile)
+        view = EquipTitleView(
+            user_db_id, 
+            options, 
+            author_id=panel_author_id, 
+            on_refresh_profile=refresh_profile
+        )
         await inter.response.send_message("🎖️ Choose the title you want to equip:", view=view, ephemeral=True)
 
     async def _open_equip_badges(self, inter: discord.Interaction):
@@ -101,7 +105,12 @@ class ProfileCog(commands.Cog):
             await origin_msg.edit(attachments=[file], embed=None, view=view)
 
         user_db_id, options = get_badge_select_options(inter.user)
-        view = EquipBadgeView(user_db_id, options, author_id=panel_author_id, on_refresh_profile=refresh_profile)
+        view = EquipBadgeView(
+            user_db_id, 
+            options, 
+            author_id=panel_author_id, 
+            on_refresh_profile=refresh_profile
+        )
         await inter.response.send_message(f"🎖️ Choose the badges you want to equip ({MAX_BADGES}):", view=view, ephemeral=True)
  
     # ---------------- slash commands ----------------
@@ -155,10 +164,9 @@ class ProfileCog(commands.Cog):
             items=items,
             on_view_profile=_back,
             display_name=display_name,
-            author_id=interaction.user.id,         # <<< NEW
+            author_id=interaction.user.id    
         )
         await interaction.response.send_message(embed=view.build_embed(), view=view, ephemeral=True)
-
 
     # === EQUIP BADGE COMMAND ===
     @app_commands.command(name="equip_badge", description=f"Select up to {MAX_BADGES} badges to display on your profile.")
@@ -174,7 +182,11 @@ class ProfileCog(commands.Cog):
             await interaction.followup.send("ℹ️ You don't own any badges yet.", ephemeral=True)
             return
 
-        view = EquipBadgeView(user_db_id=user_db_id, options=options)
+        view = EquipBadgeView(
+            user_db_id=user_db_id, 
+            options=options,
+            author_id=interaction.user.id
+        )
         await interaction.followup.send(f"🎖️ Choose the badges you want to equip (max. {MAX_BADGES}):", view=view, ephemeral=True)
 
     # === EQUIP TITLE COMMAND ===
@@ -190,10 +202,14 @@ class ProfileCog(commands.Cog):
             await interaction.followup.send("ℹ️ You don't own any title yet.", ephemeral=True)
             return
 
-        view = EquipTitleView(user_db_id=user_db_id, options=options)
+        view = EquipTitleView(
+            user_db_id=user_db_id, 
+            options=options,
+            author_id=interaction.user.id
+        )
         await interaction.followup.send("🎖️ Choose the title you want to equip:", view=view, ephemeral=True)
 
-    
+        
     
     # === VIEW EVENT COMMAND ===
     @app_commands.command(name="event", description="Browse current events.")
