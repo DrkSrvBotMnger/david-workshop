@@ -29,7 +29,7 @@ def validate_shortcode(shortcode: str) -> Optional[str]:
 def normalize_fields(selected: List[str]) -> List[str]:
     """Always return ['general', ...unique valid selections in given order]."""
     seen = set()
-    cleaned = []
+    cleaned = ["general"]
     for f in selected:
         if f in ALLOWED_ACTION_INPUT_FIELDS and f not in seen:
             seen.add(f)
@@ -37,7 +37,7 @@ def normalize_fields(selected: List[str]) -> List[str]:
     # must have at least one after filtering
     if not cleaned:
         return []
-    return ["general"] + cleaned
+    return ["general"]
 
 
 
@@ -93,7 +93,7 @@ class FieldMultiSelect(discord.ui.Select):
     def __init__(self, options, parent: "FieldSelectView", row: int = 0):
         super().__init__(
             placeholder="Choose input fields…",
-            min_values=1,
+            min_values=0,
             max_values=len(options),
             options=[discord.SelectOption(label=f, value=f) for f in options],
             row=row,

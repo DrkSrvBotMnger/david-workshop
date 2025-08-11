@@ -387,7 +387,7 @@ class UserActions(commands.Cog):
                 fields = parse_required_fields(action.input_fields_json)
                 help_map = parse_help_texts(ae.input_help_text, fields)
 
-                label =f"{event.event_name} • {action.action_description} ({ae.variant})"
+                label =f"{action.action_description} ({ae.variant}) • {event.event_name}"
                 general = (help_map.get("general") or "").strip()
                 print(f"general {general}")
                 desc = general[:100] or "Report this action"

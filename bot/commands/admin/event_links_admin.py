@@ -5,7 +5,7 @@ from db.database import db_session
 from db.schema import RewardEvent, ActionEvent, Action
 from bot.crud import events_crud, rewards_crud, reward_events_crud, actions_crud, action_events_crud
 from bot.utils.time_parse_paginate import parse_required_fields, parse_help_texts
-
+from bot.config.constants import CURRENCY
 from bot.ui.admin.event_link_views import (
     EventSelect, RewardSelect, RewardEventSelect, AvailabilitySelect, PricePicker, ForceConfirmView, ActionEventSelect,
     ActionSelect, VariantPickerView, HelpTextPerFieldView, YesNoView, ToggleYesNoView,
@@ -117,7 +117,7 @@ class EventLinksAdminFriendly(commands.Cog):
             
             # === Step 6: Announce reward creation ===
             if availability == "inshop":
-                availability_display = f"in shop for {price} vlachka"
+                availability_display = f"in shop for {price} {CURRENCY}"
             else:
                 availability_display = "on action"
 
@@ -366,7 +366,7 @@ class EventLinksAdminFriendly(commands.Cog):
                 session.flush()
 
             if new_availability == "inshop":
-                new_availability_display = f"now in shop for {new_price} vlachka"
+                new_availability_display = f"now in shop for {new_price} {CURRENCY}"
             else:
                 new_availability_display = "now on action"
 

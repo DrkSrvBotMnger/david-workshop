@@ -12,10 +12,14 @@ def build_event_embed(event_data, guild_id=None):
         "active": "🎉 Active",
         "archived": "📦 Archived"
     }
+    
     event_status = status_icons.get(event_data["event_status"], event_data["event_status"].capitalize())
     event_type = event_data["event_type"].capitalize()
-    role_status = "✅" if event_data["role_discord_id"] else "❌"
-    embed_status = "✅" if event_data["embed_message_discord_id"] else "❌"
+    role_status = f"✅ <@&{event_data['role_discord_id']}>" if event_data["role_discord_id"] else "❌"
+    if event_data["embed_message_discord_id"] and guild_id:
+        jump_link = f"https://discord.com/channels/{guild_id}/{event_data['embed_channel_discord_id']}/{event_data['embed_message_discord_id']}"
+    
+    embed_status = f"✅ [🔗Link]({jump_link})" if event_data["embed_message_discord_id"] else "❌"
     coordinator_display = f"<@{event_data['coordinator_discord_id']}>" if event_data["coordinator_discord_id"] else "*None*"
     tag_display = event_data["tags"] if event_data["tags"] else "*None*"
     description = event_data["event_description"] if event_data["event_description"] else "*No description*"
@@ -32,15 +36,10 @@ def build_event_embed(event_data, guild_id=None):
     embed.add_field(name="🎉 Type", value=event_type, inline=True)
     embed.add_field(name="👤 Coordinator", value=coordinator_display, inline=True)       
     embed.add_field(name="🎭 Role", value=role_status, inline=True)
-    embed.add_field(name="🧵 Embed?", value=embed_status, inline=True)
+    embed.add_field(name="🧵 Display", value=embed_status, inline=True)
     embed.add_field(name="⭐ Priority", value=priority, inline=True)
     embed.add_field(name="🏷️ Tags", value=tag_display, inline=False)
     embed.add_field(name="✏️ Description", value=description, inline=False)
-
-    if event_data["embed_message_discord_id"] and guild_id:
-        jump_link = f"https://discord.com/channels/{guild_id}/{event_data['embed_channel_discord_id']}/{event_data['embed_message_discord_id']}"
-        embed.add_field(name="🔗 Embed Link", value=f"[Jump to Embed]({jump_link})", inline=False)
-
     embed.add_field(name="👩‍💻 Created / Edited By", value=created_edited, inline=False)
     return embed
 

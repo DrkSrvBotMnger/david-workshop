@@ -2,6 +2,7 @@ from discord import app_commands, Interaction, SelectOption, Embed, ButtonStyle,
 from discord.ext import commands
 from discord.ui import View, Button, Select
 from db.database import db_session
+from bot.config.constants import CURRENCY
 from bot.crud import users_crud
 from bot.crud.shop_crud import get_inshop_catalog_grouped
 from bot.crud.purchase_crud import fetch_reward_event, apply_purchase, PurchaseError
@@ -62,7 +63,7 @@ class ShopSelect(Select):
                     return
 
         await interaction.response.send_message(
-            f"✅ Purchased **{reward_name}** for **{price}** vlachki from **{event_name}**!",
+            f"✅ Purchased **{reward_name}** for **{price}** {CURRENCY} from **{event_name}**!",
             ephemeral=True
         )
 
@@ -108,7 +109,7 @@ class ShopPager(ui.View):
                 for it in by_type[t]:
                     emb.add_field(
                         name="\n",
-                        value=f"**{it['reward_name']}** — {it['price']} vlachki :coin:",
+                        value=f"**{it['reward_name']}** — {it['price']} {CURRENCY} :coin:",
                         inline=False,
                         )
 
@@ -125,13 +126,13 @@ class ShopPager(ui.View):
                 for it in items:
                     emb.add_field(
                         name="\n",
-                        value=f"**{it['reward_name']}** — {it['price']} vlachki :coin:\n*from {it['_event_name']}*",
+                        value=f"**{it['reward_name']}** — {it['price']} {CURRENCY} :coin:\n*from {it['_event_name']}*",
                         inline=False,
                     )
             else:
                 emb.add_field(name="\n", value="(No items across events)", inline=False)
 
-        emb.set_footer(text=f"Your wallet: {self.user_points} vlachki")
+        emb.set_footer(text=f"Your wallet: {self.user_points} {CURRENCY}")
         return emb
     
     
@@ -196,7 +197,7 @@ class ShopPager(ui.View):
             if items:
                 opts = [
                     SelectOption(
-                        label=f"{it['reward_name'][:80]} — {it['price']} vlachki — {it['reward_type']}"[:100],
+                        label=f"{it['reward_name'][:80]} — {it['price']} {CURRENCY} — {it['reward_type']}"[:100],
                         value=it['reward_event_key'][:100],
                     ) for it in items[:25]
                 ]
@@ -217,7 +218,7 @@ class ShopPager(ui.View):
                 opts = [
                     SelectOption(
                         # include event name in label so user knows the source
-                        label=f"{it['reward_name'][:80]} — {it['price']} vlachki"[:100],
+                        label=f"{it['reward_name'][:80]} — {it['price']} {CURRENCY}"[:100],
                         value=it['reward_event_key'][:100],
                     ) for it in items[:25]  # 25 max in a Discord select
                 ]

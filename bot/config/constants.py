@@ -32,3 +32,6 @@ UNICODE_EMOJI = regex.compile(
 
  # display limit on profile
 MAX_BADGES = 12 
+
+# bot currency
+CURRENCY = "vlachki"

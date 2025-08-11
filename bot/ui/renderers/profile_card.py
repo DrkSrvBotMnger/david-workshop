@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
+from bot.config.constants import CURRENCY
 from typing import List, Union
 
 def generate_profile_card(
@@ -42,7 +43,7 @@ def generate_profile_card(
     bill_img = Image.open(bill_path).resize((20, 20)).convert("RGBA")
     
     # Points
-    draw.text((370, 40), "Vlachki", font=font_big, fill="gold", anchor="ra")
+    draw.text((370, 40), f"{CURRENCY.capitalize()}", font=font_big, fill="gold", anchor="ra")
     draw.text((345, 80), f"{points} in wallet", font=font_small, fill="gold", anchor="ra")
     base.paste(coin_img, (350 , 80), coin_img)
     draw.text((345, 105), f"{total_earned} earned total", font=font_small, fill="gold", anchor="ra")
