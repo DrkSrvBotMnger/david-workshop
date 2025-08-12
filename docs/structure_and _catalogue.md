@@ -4,26 +4,45 @@
 ├─ bot/
 │  ├─ cogs/
 │  │  └─ user/
-│  │     ├─ profile_cog.py              # /profile, /inventory, /equip_title, /equip_badge are clean 
+│  │     ├─ profile_cog.py              # clean 
+│  │     ├─ event_cog.py                # clean 
+│  │
+│  ├─ crud/
+│  │  ├─ users_crud.py                  # partially clean
+│  │  ├─ events_crud.py                 # partially clean
+│  │  └─ inventory_crud.py              
+│  │
+│  ├─ services/
+│  │  ├─ events_service.py              # clean
+│  │  ├─ inventory_service.py              
+│  │  └─ users_service.py               # clean
+│  │
+│  ├─ presentation/
+│  │  ├─ profile_presentation.py        # clean
+│  │  ├─ event_presentation.py          # clean
+│  │  ├─ equip_service.py               
 │  │
 │  ├─ ui/
+│  │  ├─ admin/
+│  │  │  ├─             
+│  │  │  ├─          
+│  │  │  ├─          
+│  │  │
 │  │  ├─ user/
 │  │  │  ├─ profile_views.py            # clean
-│  │  │  ├─ inventory_views.py          # clean
-│  │  │  ├─ equip_title_view.py         # clean
-│  │  │  └─ equip_badge_view.py         # clean
+│  │  │  ├─ inventory_views.py          
+│  │  │  ├─ equip_title_view.py         
+│  │  │  ├─ equip_badge_view.py         
+│  │  │  ├─ events_views.py             # clean
+│  │  │  └─ shop_dashboard_view.py          
+│  │  │
+│  │  ├─ common/
+│  │  │  ├─ selects.py                  # clean
+│  │  │  └─                             
+│  │  │  
 │  │  └─ renderers/
 │  │     ├─ profile_card.py             # clean
 │  │     └─ badge_loader.py             # clean
-│  │
-│  ├─ services/
-│  │  ├─ profile_service.py             # clean
-│  │  ├─ equip_service.py               # clean
-│  │  └─ users_service.py                # clean
-│  │
-│  ├─ crud/
-│  │  ├─ users_crud.py                  # partially clean (identity helpers OK)
-│  │  └─ inventory_crud.py              # clean
 │  │
 │  ├─ domain/
 │  │  ├─ dto.py                         # clean
@@ -73,6 +92,7 @@
 * **EXCLUDED\_LOG\_FIELDS** — fields to skip when comparing for logs
 * **CUSTOM\_DISCORD\_EMOJI**, **UNICODE\_EMOJI** — emoji regex patterns
 * **MAX\_BADGES** — display limit on profile
+* **CURRENCY** — display the currency name
 
 ### bot/config/environments.py
 
@@ -139,6 +159,13 @@
 * `set_titles_equipped(session, user_id, selected_key)` — equip 0/1 title
 * `set_badges_equipped(session, user_id, selected_keys)` — equip multiple badges
 
+### bot/crud/events_crud.py
+
+* `EventFilter` — generic search inputs (status/type/has\_embed/dates/priority/text/limit/offset).&#x20;
+* `search_events(session, f)` — applies `EventFilter`, orders by priority/date/name.&#x20;
+* `get_event_by_key(session, event_key)` — ORM lookup.&#x20;
+* `get_event_message_refs_by_key(session, event_key)` → `EventMessageRefs` (event\_key, event\_name, embed\_channel\_discord\_id, embed\_message\_discord\_id).&#x20;
+
 ---
 
 ## Services (clean)
@@ -164,6 +191,36 @@
     * reward_key → (channel_id, message_id, label).
     * Filters by PUBLISHABLE_REWARD_TYPES and requires both pointers.
 
+### bot/services/events_service.py
+
+* `find_events_dto(...)` — core finder; wraps `search_events`, does CSV tag post-filter, maps to `EventDTO`. &#x20;
+* `list_user_browseable_events(limit=25)` — visible/active with embeds only.&#x20;
+* `list_user_reporting_events(limit=25)` — visible/active (no embed requirement).&#x20;
+* `list_user_archived_events(limit=25, tags_any=None)` — archived with optional tag filter.&#x20;
+* `get_event_dto_by_key(event_key)` — ORM → `EventDTO`.&#x20;
+* `get_event_message_refs_dto(event_key)` — projection → `EventMessageRefsDTO`.&#x20;
+
+---
+
+## Presentation
+
+### bot/presentation/events_presentation.py
+
+* `EventOptionVM` — `{ value, label, description }` for selects.&#x20;
+* `EventMessageVM` — `{ event_key, title, channel_id, message_id, message_url }` for preview.&#x20;
+* `event_default_fmt(d)` / `event_with_status_fmt(d)` / `event_with_dates_fmt(d)` / `event_compact_admin_fmt(d)` — labeling policies.&#x20;
+* `make_event_options(dtos, fmt=...)` — `EventDTO[]` → `EventOptionVM[]`.&#x20;
+* `make_event_message_vm(refs, guild_id)` — `EventMessageRefsDTO` → `EventMessageVM`.&#x20;
+
+---
+
+## UI – Common
+
+### bot/ui/common/selects.py
+
+* `build_select_options_from_vms(vms, ...)` — generic VM→`discord.SelectOption[]` (100-char truncation).&#x20;
+* `GenericSelectView(options, on_select, ...)` — reusable select view; delegates to async handler.&#x20;
+
 ---
 
 ## UI – Renderers (clean)
@@ -178,7 +235,7 @@
 
 ---
 
-## UI – Views (clean)
+## UI – Views
 
 ### bot/ui/user/profile\_views.py
 
@@ -197,6 +254,11 @@
 
 * Badge multi-select & equip handling
 
+### bot/ui/user/events_views.py
+
+* `make_user_event_select_view(vms, on_select)` — builds a select from `EventOptionVM`.&#x20;
+* `UserEventButtons(guild_id, back_to_list=None)` — “Contact Mods” link + Back button (calls back to the cog to re-render the list).&#x20;
+
 ---
 
 ## Cogs (clean)
@@ -207,6 +269,10 @@
 * `/inventory` — show inventory list with preview publishable button
 * `/equip_title` — open title equip view
 * `/equip_badge` — open badge equip view
+
+### bot/cogs/user/event_cog.py
+
+* `/event` — initial select (followup.send) → on select: fetch original message and **edit** the same ephemeral to show the event preview + buttons; Back restores the select. &#x20;
 
 ---
 

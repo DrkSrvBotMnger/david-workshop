@@ -1,3 +1,4 @@
+# bot/services/users_service.py
 from sqlalchemy.orm import Session
 from bot.crud.users_crud import get_or_create_user, get_user_by_discord_id
 from bot.domain.mapping import user_to_dto

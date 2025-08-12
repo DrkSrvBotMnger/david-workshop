@@ -1,3 +1,4 @@
+# bot/crud/users_crud.py
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -24,7 +25,7 @@ def create_user_from_member(session: Session, member) -> User:
         modified_at=None,
     )
     session.add(user)
-    session.flush()  # ensures user.id
+    session.flush()
     return user
 
 def update_user_identity_if_changed(session: Session, user: User, member) -> bool:
@@ -53,6 +54,9 @@ def get_or_create_user(session: Session, member) -> User:
         update_user_identity_if_changed(session, user, member)
     return user
 
+
+
+# ------------------------------
 
 # --- UPDATE ---
 def update_user(

@@ -1,3 +1,4 @@
+# bot/config/environments.py
 import os
 
 ENV = os.getenv("ENV", "dev").lower()

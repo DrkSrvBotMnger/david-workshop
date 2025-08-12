@@ -4,7 +4,7 @@ from discord.ext import commands
 from typing import Optional
 
 from bot.crud import rewards_crud
-from bot.config import REWARDS_PER_PAGE, LOGS_PER_PAGE, REWARD_PRESET_CHANNEL_ID, REWARD_PRESET_ARCHIVE_CHANNEL_ID, CUSTOM_DISCORD_EMOJI, UNICODE_EMOJI, BADGE_TYPES, STACKABLE_TYPES, PUBLISHABLE_REWARD_TYPES
+from bot.config import REWARDS_PER_PAGE, LOGS_PER_PAGE, REWARD_PRESET_CHANNEL_ID, REWARD_PRESET_ARCHIVE_CHANNEL_ID, CUSTOM_DISCORD_EMOJI, UNICODE_EMOJI, EMOJI_TYPES, STACKABLE_TYPES, PUBLISHABLE_REWARD_TYPES
 from bot.utils.time_parse_paginate import admin_or_mod_check, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, now_unix, parse_message_link
 from db.database import db_session
 
@@ -87,7 +87,7 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
             return
             
         # Enforce emoji rule
-        if reward_type.lower() not in BADGE_TYPES:
+        if reward_type.lower() not in EMOJI_TYPES:
             emoji = None
 
         # Enforce stackable rule
@@ -178,10 +178,10 @@ class AdminRewardCommands(commands.GroupCog, name="admin_reward"):
                         return
 
             # Enforce emoji rule
-            if reward.reward_type.lower() not in BADGE_TYPES:
+            if reward.reward_type.lower() not in EMOJI_TYPES:
                 emoji = None
                 # Enforce emoji requirement for badges
-            if reward.reward_type.lower() in BADGE_TYPES and not self.is_valid_emoji(emoji):
+            if reward.reward_type.lower() in EMOJI_TYPES and not self.is_valid_emoji(emoji):
                 await interaction.followup.send("❌ Badge rewards must have a valid emoji.")
                 return
 

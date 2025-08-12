@@ -24,6 +24,7 @@ class MyBot(commands.Bot):
         user_cogs = [
             "bot.commands.user.shop",
             "bot.cogs.user.profile_cog",
+            "bot.cogs.user.event_cog",
             "bot.commands.user.use",
             "bot.commands.user.report_action",
         ]    

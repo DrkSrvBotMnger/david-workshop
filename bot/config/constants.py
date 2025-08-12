@@ -1,3 +1,4 @@
+# bot/config/constants.py
 import regex
 
 # Allowed input fields for Action definitions
@@ -13,7 +14,7 @@ REWARDS_PER_PAGE = 5
 LOGS_PER_PAGE    = 5
 
 # Reward-type groupings / rules
-BADGE_TYPES = ("badge",)
+EMOJI_TYPES = ("badge",)
 STACKABLE_TYPES = ("preset", "dynamic")
 PUBLISHABLE_REWARD_TYPES = ("preset", "dynamic")
 

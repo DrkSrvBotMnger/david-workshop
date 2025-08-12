@@ -1,3 +1,4 @@
+# bot/utils/permissions.py
 import discord
 from discord import app_commands, Interaction
 from bot.config import MOD_ROLE_IDS

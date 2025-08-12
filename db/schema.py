@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from sqlalchemy import Boolean, Column, Enum, ForeignKey, Integer, String, Text, UniqueConstraint  
 from sqlalchemy.orm import declarative_base, relationship
 
-
 Base = declarative_base()
 
 # === TABLE DEFINITIONS ===
@@ -37,7 +36,6 @@ class User(Base):
     def __repr__(self):
         return f"<User {self.user_discord_id} name={self.username}>"
 
-
 # Event statuses
 class EventStatus(enum.Enum):
     draft = "draft"        # Not visible, not active
@@ -64,7 +62,7 @@ class Event(Base):
     embed_message_discord_id = Column(String, nullable=True)		# discord unique message id
     role_discord_id = Column(String, nullable=True)		# discord unique role id
 
-    event_status = Column(Enum(EventStatus), default=EventStatus.draft, nullable=False)
+    event_status = Column(Enum(EventStatus), nullable=False)
 
     created_by = Column(String, nullable=False)		# discord unique user id
     created_at = Column(String, nullable=False)
@@ -79,7 +77,6 @@ class Event(Base):
     
     def __repr__(self):
         return f"<Event {self.event_key} name={self.event_name}>"
-
 
 # Logs changes to events by moderators.
 class EventLog(Base):
@@ -109,7 +106,6 @@ class EventLog(Base):
             f"by={self.performed_by} at={self.performed_at}>"
         )
 
-
 # Rewards owned by users: titles, badges, or items (stackable or not).
 # Can include acquisition source or equipped status.
 class Inventory(Base):
@@ -133,7 +129,6 @@ class Inventory(Base):
             f"reward={self.reward.reward_key if self.reward else self.reward_id} "
             f"quantity={self.quantity}>"
         )
-
 
 # User-specific data for a given event.
 # Tracks event participation stats and optional contact info.
@@ -170,7 +165,6 @@ class UserEventData(Base):
             f"event={self.event.event_key if self.event else self.event_id}>"
         )
 
-
 # Defines possible actions users or moderators can perform.
 # Input expectations are handled in bot logic, not enforced by schema.
 class Action(Base):
@@ -190,7 +184,6 @@ class Action(Base):
 
     def __repr__(self):
         return f"<Action {self.action_key} description={self.action_description}>"
-
 
 # Configures a specific action's rewards and permissions within a specific event.
 # Includes user guidance text to explain how to report the action in this event.
@@ -233,7 +226,6 @@ class ActionEvent(Base):
             f"reward={self.reward_event.reward_event_key if self.reward_event else self.reward_event_id}>"
         )
 
-
 class ActionEventLog(Base):
     __tablename__ = "action_event_logs"
 
@@ -259,7 +251,6 @@ class ActionEventLog(Base):
             f"{action_event_ref} "
             f"by={self.performed_by} at={self.performed_at}>"
         )
-
 
 # Logs individual actions performed by users.
 # Flexible standardized fields enable reporting and filtering.
@@ -293,7 +284,6 @@ class UserAction(Base):
             f"event={self.event.event_key if self.event else self.event_id} "
             f"at={self.created_at}>"
         )
-
 
 # Rewards available: titles, badges, preset or dynamic.
 # Shows stackability of items and the number of rewards distributed to users.
@@ -338,7 +328,6 @@ class Reward(Base):
     def __repr__(self):
         return f"<Reward {self.reward_key} name={self.reward_name}>"
 
-
 # Rewards setup for multiple media (images, GIFs) rewards
 class RewardMedia(Base):
     __tablename__ = 'reward_medias'
@@ -353,7 +342,6 @@ class RewardMedia(Base):
 
     def __repr__(self):
         return f"<RewardMedia reward={self.reward.reward_key if self.reward else self.reward_id} media_url={self.media_url}>"
-
 
 # Logs changes to rewards by moderators.
 class RewardLog(Base):
@@ -377,7 +365,6 @@ class RewardLog(Base):
             reward_ref = f"id={self.id}"
 
         return (f"<RewardLog {self.log_action} {reward_ref}, by={self.performed_by} at={self.performed_at}>")
-
 
 # Links rewards to events.
 # Determines if reward is sold in shop or granted by performing an action.
@@ -409,7 +396,6 @@ class RewardEvent(Base):
 
     def __repr__(self):
         return f"<RewardEvent reward_event_key={self.reward_event_key}>"
-
 
 class RewardEventLog(Base):
     __tablename__ = "reward_event_logs"

@@ -1,3 +1,4 @@
+# bot/ui/user/profile_views.py
 import discord
 from typing import Awaitable, Callable
 

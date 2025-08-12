@@ -1,3 +1,4 @@
+# bot/ui/renderers/profile_card.py
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
 from bot.config.constants import CURRENCY
@@ -8,7 +9,7 @@ def generate_profile_card(
     display_name: str,
     points: int,
     total_earned: int,
-    title: str,
+    title: str | None,
     badges: List[Union[Image.Image, str]]
 ) -> io.BytesIO:
     """Generate a profile card image from real data with emoji or image badges."""

@@ -1,3 +1,4 @@
+# bot/utils/emoji.py
 from __future__ import annotations
 from typing import Optional
 from bot.config.constants import CUSTOM_DISCORD_EMOJI

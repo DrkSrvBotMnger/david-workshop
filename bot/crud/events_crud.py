@@ -1,20 +1,110 @@
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
+# bot/crud/events_crud.py
 from typing import Optional
 from bot.config import EXCLUDED_LOG_FIELDS
 from bot.crud import general_crud
 from bot.utils.time_parse_paginate import now_iso
-from db.schema import Event, EventLog, EventStatus
+from db.schema import EventLog
 
+# -----------------------------------------------------------------------------
+from dataclasses import dataclass
+from typing import NamedTuple
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+from db.schema import Event, EventStatus
 
-# --- GET ---
-def get_event_by_key(
-    session: Session, 
+# ---- Generic filter spec ----------------------------------------------------
+
+@dataclass(frozen=True)
+class EventFilter:
+    status_in: tuple[EventStatus, ...] | None = None
+    types_in: tuple[str, ...] | None = None
+    coordinator_ids: tuple[str, ...] | None = None
+    has_embed: bool | None = None
+    start_date_min: str | None = None
+    start_date_max: str | None = None
+    priority_min: int | None = None
+    priority_max: int | None = None
+    search_name_icontains: str | None = None
+    order_by_priority_then_date: bool = True
+    limit: int | None = None
+    offset: int | None = None
+
+def search_events(session: Session, f: EventFilter) -> list[Event]:
+    q = session.query(Event)
+
+    if f.status_in:
+        q = q.filter(Event.event_status.in_(f.status_in))
+    if f.types_in:
+        q = q.filter(Event.event_type.in_(f.types_in))
+    if f.coordinator_ids:
+        q = q.filter(Event.coordinator_discord_id.in_(f.coordinator_ids))
+
+    if f.has_embed is True:
+        q = q.filter(
+            Event.embed_channel_discord_id.isnot(None),
+            Event.embed_message_discord_id.isnot(None),
+        )
+    elif f.has_embed is False:
+        q = q.filter(
+            (Event.embed_channel_discord_id.is_(None)) |
+            (Event.embed_message_discord_id.is_(None))
+        )
+
+    if f.start_date_min:
+        q = q.filter(Event.start_date >= f.start_date_min)
+    if f.start_date_max:
+        q = q.filter(Event.start_date < f.start_date_max)
+
+    if f.priority_min is not None:
+        q = q.filter(Event.priority >= f.priority_min)
+    if f.priority_max is not None:
+        q = q.filter(Event.priority <= f.priority_max)
+
+    if f.search_name_icontains:
+        like = f"%{f.search_name_icontains.lower()}%"
+        q = q.filter(Event.event_name.ilike(like))
+
+    if f.order_by_priority_then_date:
+        q = q.order_by(Event.priority.desc(), Event.start_date.asc(), Event.event_name.asc())
+
+    if f.offset is not None:
+        q = q.offset(f.offset)
+    if f.limit is not None:
+        q = q.limit(f.limit)
+
+    return q.all()
+
+# ---- Common direct lookups / projections ------------------------------------
+
+def get_event_by_key(session: Session, event_key: str) -> Event | None:
+    return session.query(Event).filter(Event.event_key == event_key).first()
+
+class EventMessageRefs(NamedTuple):
     event_key: str
-) -> Optional[Event]:
-    """Retrieve an event by its internal event_key."""
- 
-    return session.query(Event).filter_by(event_key=event_key).first()
+    event_name: str
+    embed_channel_discord_id: str
+    embed_message_discord_id: str
+
+def get_event_message_refs_by_key(session: Session, event_key: str) -> EventMessageRefs | None:
+    row = (
+        session.query(
+            Event.event_key.label("event_key"),
+            Event.event_name.label("event_name"),
+            Event.embed_channel_discord_id.label("embed_channel_discord_id"),
+            Event.embed_message_discord_id.label("embed_message_discord_id"),
+        )
+        .filter(Event.event_key == event_key)
+        .first()
+    )
+    if not row or not row.embed_channel_discord_id or not row.embed_message_discord_id:
+        return None
+    return EventMessageRefs(row.event_key, row.event_name, row.embed_channel_discord_id, row.embed_message_discord_id)
+
+
+
+
+# ------- old cruds to be repalced during refactoring -------
+# --- GET ---
 
 
 def get_event_by_id(

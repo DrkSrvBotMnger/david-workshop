@@ -1,3 +1,4 @@
+# bot/presentation/profile_presentation.py
 from dataclasses import dataclass
 from typing import Optional
 import aiohttp
@@ -16,14 +17,18 @@ from bot.services.users_service import get_or_create_user_dto
 # CRUD
 from bot.crud.inventory_crud import get_equipped_title_name, get_equipped_badge_emojis
 
+# --- View Model --------------------------------------------------------------
+
 @dataclass
 class ProfileVM:
     display_name: str
     points: int
     total_earned: int
-    title_text: Optional[str]
+    title_text: str | None
     badge_emojis: list[str]
     avatar_url: str
+
+# --- Formatters --------------------------------------------------------------
 
 def fetch_profile_vm(target_member) -> ProfileVM:
     """Fetch a ProfileVM for a given member — DTO-only, no ORM rows returned."""

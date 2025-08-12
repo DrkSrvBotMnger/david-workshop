@@ -210,3 +210,54 @@
   ui:
     views:
       - user.equip_title_view.EquipTitleView
+
+
+/event:
+cog: bot.cogs.user.event_cog
+
+callbacks:
+  - view_event (initial render):
+      services:
+        - events_service.list_user_browseable_events          # returns EventDTO list :contentReference[oaicite:0]{index=0}
+      presentation:
+        - events_presentation.make_event_options              # EventDTO[] -> EventOptionVM[] :contentReference[oaicite:1]{index=1}
+        - events_presentation.event_default_fmt               # label/description policy :contentReference[oaicite:2]{index=2}
+      ui:
+        - ui.common.selects.GenericSelectView                 # generic picker view :contentReference[oaicite:3]{index=3}
+        - ui.user.events_views.make_user_event_select_view    # thin builder for user events :contentReference[oaicite:4]{index=4}
+
+  - on_event_selected (select -> preview):
+      services:
+        - events_service.get_event_message_refs_dto           # EventMessageRefsDTO :contentReference[oaicite:5]{index=5}
+      presentation:
+        - events_presentation.make_event_message_vm           # -> EventMessageVM (ids + title + url) :contentReference[oaicite:6]{index=6}
+      ui:
+        - (cog) fetch original Discord message and EDIT ephemeral in place  # see event_cog implementation :contentReference[oaicite:7]{index=7}
+        - ui.user.events_views.UserEventButtons               # “Contact Mods” + Back button :contentReference[oaicite:8]{index=8}
+
+services:
+  - events_service.find_events_dto:
+      crud:
+        - events_crud.search_events                           # uses EventFilter, ordering, limit/offset :contentReference[oaicite:9]{index=9}
+      postfilter:
+        - tag CSV any/all filtering (temporary)               # service-level filter :contentReference[oaicite:10]{index=10}
+      returns:
+        - List[EventDTO]
+
+  - events_service.get_event_dto_by_key:
+      crud:
+        - events_crud.get_event_by_key                        # ORM lookup by event_key :contentReference[oaicite:11]{index=11}
+      returns:
+        - EventDTO | None
+
+  - events_service.get_event_message_refs_dto:
+      crud:
+        - events_crud.get_event_message_refs_by_key           # projection NamedTuple with embed ids :contentReference[oaicite:12]{index=12}
+      returns:
+        - EventMessageRefsDTO
+
+ui:
+  views:
+    - ui.common.selects.GenericSelectView                     # reusable select view :contentReference[oaicite:13]{index=13}
+    - ui.user.events_views.make_user_event_select_view        # builds select for EventOptionVMs :contentReference[oaicite:14]{index=14}
+    - ui.user.events_views.UserEventButtons                   # buttons (Back + link) :contentReference[oaicite:15]{index=15}

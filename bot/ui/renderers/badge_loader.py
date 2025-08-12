@@ -1,3 +1,4 @@
+# bot/ui/renderers/badge_loader.py
 import aiohttp
 import io
 from PIL import Image

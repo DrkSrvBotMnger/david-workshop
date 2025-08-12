@@ -1,25 +1,25 @@
 # bot/cogs/user/profile_cog.py
 import discord
-from discord import app_commands, File, Interaction, SelectOption
+from discord import app_commands, Interaction
 from typing import Optional
 from discord.ext import commands
 
 from bot.config.constants import MAX_BADGES
 from bot.utils.discord_helpers import resolve_display_name
 from db.database import db_session
-from db.schema import EventStatus, Inventory, Reward, User, Event
 
 # UI
 from bot.ui.user.profile_views import ProfileView
 from bot.ui.user.inventory_views import InventoryView
-from bot.ui.user.event_button import EventSelectView
 from bot.ui.user.equip_badge_view import EquipBadgeView
 from bot.ui.user.equip_title_view import EquipTitleView
 
+# Presentation
+from bot.presentation.profile_presentation import fetch_profile_vm, build_profile_file_and_name
+from bot.services.equip_service import get_title_select_options, get_badge_select_options
+
 # Services
 from bot.services.users_service import get_or_create_user_dto
-from bot.services.profile_service import fetch_profile_vm, build_profile_file_and_name
-from bot.services.equip_service import get_title_select_options, get_badge_select_options
 from bot.services.inventory_service import get_user_publishables_for_preview
 
 # CRUD
@@ -215,40 +215,6 @@ class ProfileCog(commands.Cog):
             author_id=interaction.user.id
         )
         await interaction.followup.send("🎖️ Choose the title you want to equip:", view=view, ephemeral=True)
-
-        
-    
-    # === VIEW EVENT COMMAND ===
-    @app_commands.command(name="event", description="Browse current events.")
-    async def view_event(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-
-        with db_session() as session:
-            rows = (
-                session.query(Event)
-                .filter(Event.event_status.in_([EventStatus.visible, EventStatus.active]))
-                .filter(Event.embed_channel_discord_id.isnot(None))
-                .filter(Event.embed_message_discord_id.isnot(None))
-                .order_by(Event.priority.desc(), Event.start_date.asc(), Event.event_name.asc())
-                .all()
-            )
-
-            if not rows:
-                await interaction.followup.send("There are no events to show right now.", ephemeral=True)
-                return
-
-            options: list[dict] = []
-            for ev in rows[:25]:  # Discord limit
-                options.append({
-                    "label": ev.event_name,
-                    "value": ev.event_key,
-                    "description": ev.event_type or "Event"
-                })
-
-        view = EventSelectView(options)
-        await interaction.followup.send("Select an event to view:", view=view, ephemeral=True)
-
-
 
 # === COG SETUP ===
 async def setup(bot):
