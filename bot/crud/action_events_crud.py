@@ -1,10 +1,112 @@
-from sqlalchemy import or_
+# bot/crud/action_events_crud.py
+from __future__ import annotations
+
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional, List, Iterable, Sequence, Tuple
 from bot.crud import general_crud
-from db.schema import ActionEvent, ActionEventLog
+from db.schema import Action, ActionEvent, Event, RewardEvent, UserAction, Reward, ActionEventLog
+
+# --- READ: candidates for user self-report in one event ---
+def list_self_reportable_action_events_for_event(
+    session: Session,
+    event_id: int,
+) -> list[tuple[ActionEvent, Action, RewardEvent | None, Event]]:
+    """
+    Returns tuples (ae, action, revent, event) for a single event where:
+      - Action.is_active is True and Action.deactivated_at is NULL
+      - ActionEvent.is_self_reportable is True
+    NOTE: user-based checks (repeatability), and event-status gating are handled in the service layer.
+    """
+    q = (
+        session.query(ActionEvent, Action, RewardEvent, Event)
+        .join(Action, ActionEvent.action_id == Action.id)
+        .join(Event, ActionEvent.event_id == Event.id)
+        .outerjoin(RewardEvent, RewardEvent.id == ActionEvent.reward_event_id)
+        .filter(ActionEvent.event_id == event_id)
+        .filter(and_(Action.is_active.is_(True), Action.deactivated_at.is_(None)))
+        .filter(ActionEvent.is_self_reportable.is_(True))
+    )
+
+    out: list[tuple[ActionEvent, Action, RewardEvent | None, Event]] = []
+    for row in q.all():
+        ae, action, revent, ev = row  # unpack Row -> real tuple
+        out.append((ae, action, revent, ev))
+    return out
+
+# --- READ: fetch 1 AE bundle by id (used on submit) ---
+def get_action_event_bundle(
+    session: Session,
+    action_event_id: int,
+) -> tuple[ActionEvent, Action, RewardEvent | None, Event] | None:
+    """
+    Returns (ae, action, revent, event) or None.
+    """
+    row = (
+        session.query(ActionEvent, Action, RewardEvent, Event)
+        .join(Action, ActionEvent.action_id == Action.id)
+        .join(Event, ActionEvent.event_id == Event.id)
+        .outerjoin(RewardEvent, RewardEvent.id == ActionEvent.reward_event_id)
+        .filter(ActionEvent.id == action_event_id)
+        .first()
+    )
+    if row is None:
+        return None
+    ae, action, revent, ev = row  # unpack Row -> real tuple
+    return ae, action, revent, ev
+
+# --- READ: repeatability check (non-repeatable already done?) ---
+def user_already_completed_non_repeatable(
+    session: Session,
+    user_id: int,
+    action_event_id: int,
+) -> bool:
+    exists = (
+        session.query(UserAction.id)
+        .filter(UserAction.user_id == user_id, UserAction.action_event_id == action_event_id)
+        .first()
+    )
+    return exists is not None
+
+# ---Quick existence map for event pickers ---
+def list_event_ids_with_any_self_reportable_action(
+    session: Session,
+    event_ids: list[int],
+) -> dict[int, bool]:
+    if not event_ids:
+        return {}
+    rows = (
+        session.query(ActionEvent.event_id)
+        .join(Action, ActionEvent.action_id == Action.id)
+        .filter(ActionEvent.event_id.in_(event_ids))
+        .filter(and_(Action.is_active.is_(True), Action.deactivated_at.is_(None)))
+        .filter(ActionEvent.is_self_reportable.is_(True))
+        .distinct()
+        .all()
+    )
+    present = {ev_id for (ev_id,) in rows}
+    return {eid: (eid in present) for eid in event_ids}
 
 
+
+
+
+
+
+# --- old crud to be replaced
+
+def get_action_event(session: Session, action_event_id: int) -> Optional[ActionEvent]:
+    return session.query(ActionEvent).get(action_event_id)        # type: ignore
+
+def get_reward_event(session: Session, reward_event_id: int) -> Optional[RewardEvent]:
+    return session.query(RewardEvent).get(reward_event_id)
+
+def get_reward(session: Session, reward_id: int) -> Optional[Reward]:
+    return session.query(Reward).get(reward_id)
+
+
+
+# --- Old CRUD functions to be reworked ---
 # --- GET ---
 def get_action_event_by_key(
     session, 

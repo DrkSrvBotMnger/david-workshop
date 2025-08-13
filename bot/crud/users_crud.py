@@ -54,7 +54,15 @@ def get_or_create_user(session: Session, member) -> User:
         update_user_identity_if_changed(session, user, member)
     return user
 
-
+def add_points_to_user(session: Session, user_id: int, delta_points: int) -> None:
+    if not delta_points:
+        return
+    user = session.query(User).get(user_id)
+    if not user:
+        return
+    user.points = (user.points or 0) + delta_points
+    user.total_earned = (user.total_earned or 0) + delta_points
+    session.flush()
 
 # ------------------------------
 

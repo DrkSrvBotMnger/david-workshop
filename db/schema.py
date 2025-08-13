@@ -74,6 +74,9 @@ class Event(Base):
     event_participants = relationship("UserEventData", back_populates="event")
     action_logs = relationship("UserAction", back_populates="event")
     change_logs = relationship("EventLog", back_populates="event")
+    # for prompt type events
+    prompts = relationship("EventPrompt", back_populates="event", passive_deletes=True)
+
     
     def __repr__(self):
         return f"<Event {self.event_key} name={self.event_name}>"
@@ -198,10 +201,15 @@ class ActionEvent(Base):
 
     points_granted = Column(Integer, default=0, nullable=False)
     reward_event_id = Column(Integer, ForeignKey('reward_events.id', ondelete="SET NULL"), nullable=True)		# id in rewards table
+    is_numeric_multiplier = Column(Boolean, nullable=False, default=False)
     is_allowed_during_visible = Column(Boolean, nullable=False, default=False)
     is_self_reportable = Column(Boolean, nullable=False, default=True)
     is_repeatable = Column(Boolean, nullable=False, default=True)
-    input_help_text = Column(Text, nullable=True)
+
+    prompts_required = Column(Boolean, nullable=False, default=False) 
+    prompts_group = Column(String, nullable=True)                      
+
+    input_help_json = Column(Text, nullable=True)
 
     created_by = Column(String, nullable=False)		# discord unique user id 
     created_at = Column(String, nullable=False)
@@ -265,7 +273,7 @@ class UserAction(Base):
     created_by= Column(String, nullable=False)		# for when actions are logged by a mod, discord unique user id 
     created_at = Column(String, nullable=False)
 
-    url = Column(String, nullable=True)
+    url_value = Column(String, nullable=True)
     numeric_value = Column(Integer, nullable=True)
     text_value = Column(String, nullable=True)
     boolean_value = Column(Boolean, nullable=True)
@@ -276,6 +284,8 @@ class UserAction(Base):
     user = relationship("User", back_populates="actions")
     action_event = relationship("ActionEvent", back_populates="performed_actions")
     event = relationship("Event", back_populates="action_logs")
+    # for prompt type events
+    selected_prompts = relationship("UserActionPrompt", back_populates="user_action", passive_deletes=True)
 
     def __repr__(self):
         return (
@@ -422,3 +432,43 @@ class RewardEventLog(Base):
             f"{reward_event_ref} "
             f"by={self.performed_by} at={self.performed_at}>"
         )
+
+# ----- Prompt type specific tables -----
+
+class EventPrompt(Base):
+    __tablename__ = "event_prompts"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+
+    group = Column(String, nullable=True)      # e.g., "sfw" / "nsfw" / other
+    day_index = Column(Integer, nullable=True) # 1..31 (optional)
+    code = Column(String, nullable=False)      # unique per event
+    label = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_by = Column(String, nullable=False)
+    created_at = Column(String, nullable=False)
+    modified_by = Column(String, nullable=True)
+    modified_at = Column(String, nullable=True)
+
+    event = relationship("Event", back_populates="prompts")
+    actions = relationship("UserActionPrompt", back_populates="prompt", passive_deletes=True)
+
+    __table_args__ = (
+        UniqueConstraint("event_id", "code", name="uix_event_prompt_code"),
+    )
+
+class UserActionPrompt(Base):
+    __tablename__ = "user_action_prompts"
+
+    id = Column(Integer, primary_key=True)
+    user_action_id = Column(Integer, ForeignKey("user_actions.id", ondelete="CASCADE"), nullable=False)
+    event_prompt_id = Column(Integer, ForeignKey("event_prompts.id", ondelete="CASCADE"), nullable=False)
+
+    user_action = relationship("UserAction", back_populates="selected_prompts")
+    prompt = relationship("EventPrompt", back_populates="actions")
+
+    __table_args__ = (
+        UniqueConstraint("user_action_id", "event_prompt_id", name="uix_action_prompt_unique"),
+    )

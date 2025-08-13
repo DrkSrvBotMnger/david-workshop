@@ -36,8 +36,8 @@ def normalize_fields(selected: List[str]) -> List[str]:
             cleaned.append(f)
     # must have at least one after filtering
     if not cleaned:
-        return []
-    return ["general"]
+        return ["general"]
+    return cleaned
 
 
 
@@ -80,12 +80,10 @@ class CreateActionModal(discord.ui.Modal, title="Create Action"):
     
         view = FieldSelectView(cog=self.cog, shortcode=self._shortcode, description=self._description)
         await interaction.response.send_message(
-            "Select at least **one** input field. ‘general’ is added automatically.",
+            "Select 0 to 4 input field. ‘general’ is added automatically.",
             view=view,
             ephemeral=True
         )
-
-
 
 
 # --- UI: FIELD MULTI-SELECT + CONFIRM ---
@@ -313,7 +311,7 @@ class AdminActionCommands(commands.GroupCog, name="admin_action"):
     
         # Icons for input field types
         FIELD_ICONS = {
-            "url": "🌐",
+            "url_value": "🌐",
             "numeric_value": "🔢",
             "text_value": "📝",
             "boolean_value": "✔️/❌",

@@ -1,5 +1,16 @@
-from db.schema import Event as EventModel, User as UserModel
-from bot.domain.dto import UserDTO, EventDTO 
+# bot/domain/mapping.py
+from typing import Tuple
+from db.schema import Event as EventModel, User as UserModel, Action as ActionModel, Reward as RewardModel, EventPrompt, UserActionPrompt, ActionEvent, RewardEvent
+from bot.domain.dto import (
+    UserDTO, EventDTO, 
+    ActionEventDTO,
+    RewardGrantDTO,
+    EventPromptDTO,
+    UserActionPromptDTO,
+    PromptPopularityDTO
+)
+
+from bot.utils.parsing import parse_required_fields, parse_help_texts
 
 def user_to_dto(u: UserModel) -> UserDTO:
     return UserDTO(
@@ -29,4 +40,73 @@ def event_to_dto(ev: EventModel) -> EventDTO:
         embed_message_discord_id=ev.embed_message_discord_id,
         role_discord_id=ev.role_discord_id,
         event_status=ev.event_status.value,
+    )
+    
+def reward_to_grant_dto(r: RewardModel) -> RewardGrantDTO:
+    return RewardGrantDTO(
+        id=r.id,
+        reward_name=r.reward_name,
+        is_stackable=bool(r.is_stackable),
+    )
+    
+def event_prompt_to_dto(ep: EventPrompt) -> EventPromptDTO:
+    return EventPromptDTO(
+        id=ep.id,
+        event_id=ep.event_id,
+        group=ep.group,
+        day_index=ep.day_index,
+        code=ep.code,
+        label=ep.label,
+        is_active=ep.is_active,
+        created_by=ep.created_by,
+        created_at=ep.created_at,
+        modified_by=ep.modified_by,
+        modified_at=ep.modified_at,
+    )
+
+def user_action_prompt_to_dto(uap: UserActionPrompt) -> UserActionPromptDTO:
+    return UserActionPromptDTO(
+        id=uap.id,
+        user_action_id=uap.user_action_id,
+        event_prompt_id=uap.event_prompt_id,
+    )
+
+def popularity_row_to_dto(row: Tuple[EventPrompt, int]) -> PromptPopularityDTO:
+    ep, uses = row
+    return PromptPopularityDTO(
+        event_id=ep.event_id,
+        prompt_id=ep.id,
+        prompt_code=ep.code,
+        prompt_label=ep.label,
+        uses=int(uses),
+    )
+
+def to_action_event_dto(ae: ActionEvent, action: ActionModel, revent: RewardEvent | None) -> ActionEventDTO:
+    fields = parse_required_fields(action.input_fields_json)
+    help_map = parse_help_texts(ae.input_help_json, fields)
+
+    action_is_active = bool(action.is_active) and (action.deactivated_at is None)
+
+    return ActionEventDTO(
+        id=ae.id,
+        action_event_key=ae.action_event_key,
+        event_id=ae.event_id,
+        action_id=ae.action_id,
+        action_description=action.action_description,
+        variant=ae.variant,
+
+        input_fields=fields,
+        input_help_map=help_map,
+
+        is_self_reportable=bool(ae.is_self_reportable),
+        is_repeatable=bool(ae.is_repeatable),
+        is_allowed_during_visible=bool(ae.is_allowed_during_visible),
+        action_is_active=action_is_active,
+        is_numeric_multiplier=bool(ae.is_numeric_multiplier),
+
+        points_granted=ae.points_granted or 0,
+        has_direct_reward=bool(revent),
+
+        prompts_required=bool(getattr(ae, "prompts_required", False)),
+        prompts_group=getattr(ae, "prompts_group", None),
     )

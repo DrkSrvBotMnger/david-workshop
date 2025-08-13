@@ -3,7 +3,7 @@ import regex
 
 # Allowed input fields for Action definitions
 ALLOWED_ACTION_INPUT_FIELDS = [
-    "url", "numeric_value", "text_value", "boolean_value", "date_value"
+    "url_value", "numeric_value", "text_value", "boolean_value", "date_value"
 ]
 SUPPORTED_FIELDS = set(ALLOWED_ACTION_INPUT_FIELDS)
 

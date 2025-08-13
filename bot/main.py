@@ -12,7 +12,8 @@ class MyBot(commands.Bot):
             "bot.commands.admin.actions_admin",
             "bot.commands.admin.rewards_admin",
             "bot.commands.admin.event_links_admin",
-            "bot.commands.admin.mod_economy"
+            "bot.commands.admin.mod_economy",
+            "bot.cogs.admin.prompts_cog",
         ]
         for cog in admin_cogs:
             try:
@@ -26,7 +27,7 @@ class MyBot(commands.Bot):
             "bot.cogs.user.profile_cog",
             "bot.cogs.user.event_cog",
             "bot.commands.user.use",
-            "bot.commands.user.report_action",
+            #"bot.commands.user.report_action",
         ]    
         for cog in user_cogs:
             try:

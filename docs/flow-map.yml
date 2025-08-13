@@ -261,3 +261,80 @@ ui:
     - ui.common.selects.GenericSelectView                     # reusable select view :contentReference[oaicite:13]{index=13}
     - ui.user.events_views.make_user_event_select_view        # builds select for EventOptionVMs :contentReference[oaicite:14]{index=14}
     - ui.user.events_views.UserEventButtons                   # buttons (Back + link) :contentReference[oaicite:15]{index=15}
+
+
+
+    /report_action:
+    intent: "User reports a self-reportable action for an event."
+    entrypoint:
+      cog: bot/cogs/user/event_cog.py::UserEventCog.report_action
+    ui:
+      - bot/ui/common/selects.py::GenericSelectView
+      - bot/ui/common/selects.py::build_select_options_from_vms
+      - bot/ui/user/report_action_views.py::make_event_select_view
+      - bot/ui/user/report_action_views.py::make_action_select_view
+      - bot/ui/user/report_action_views.py::ReportActionModal
+    presentation:
+      - bot/presentation/user_actions_presentation.py::get_event_pick_vms
+      - bot/presentation/user_actions_presentation.py::get_event_and_action_vms
+      - bot/presentation/user_actions_presentation.py::submit_report_action_presentation
+      - bot/presentation/user_actions_presentation.py::EventPickVM
+      - bot/presentation/user_actions_presentation.py::ActionOptionVM
+    services:
+      - bot/services/action_events_service.py::list_user_doable_action_events
+      - bot/services/user_actions_service.py::submit_user_action
+      - bot/services/events_service.py::list_user_reporting_events
+      - bot/services/events_service.py::get_event_dto_by_key
+      - bot/services/events_service.py::get_status_name
+      - bot/services/events_service.py::get_event_is_open_for_action
+      - bot/services/rewards_service.py::get_reward_dto_by_reward_event_id
+      - bot/services/rewards_service.py::bump_reward_granted_counter
+      - bot/services/users_service.py::get_or_create_user_dto
+    crud:
+      - bot/crud/action_events_crud.py::list_self_reportable_action_events_for_event
+      - bot/crud/action_events_crud.py::user_already_completed_non_repeatable
+      - bot/crud/action_events_crud.py::get_action_event_bundle
+      - bot/crud/user_actions_crud.py::insert_user_action
+      - bot/crud/user_event_data_crud.py::get_or_create_user_event_data
+      - bot/crud/user_event_data_crud.py::add_points_to_user_event_data
+      - bot/crud/users_crud.py::add_points_to_user
+      - bot/crud/rewards_crud.py::get_reward_by_reward_event_id
+      - bot/crud/rewards_crud.py::increment_reward_number_granted
+      - bot/crud/inventory_crud.py::add_or_increment_inventory
+      - bot/crud/events_crud.py::get_event_by_key
+      - bot/crud/events_crud.py::list_user_reporting_events
+    domain:
+      dto:
+        - bot/domain/dto.py::ActionEventDTO
+        - bot/domain/dto.py::UserActionCreateDTO
+        - bot/domain/dto.py::ActionReportResultDTO
+        - bot/domain/dto.py::RewardGrantDTO
+      mapping:
+        - bot/domain/mapping.py::to_action_event_dto
+        - bot/domain/mapping.py::reward_to_grant_dto
+    utils:
+      - bot/utils/parsing.py::parse_required_fields
+      - bot/utils/parsing.py::parse_help_texts
+      - bot/ui/common/selects.py
+    flow:
+      - step: open
+        action: user runs /report_action
+        result:
+          - if no events: ephemeral "No events available"
+          - else: send Event select view (GenericSelectView)
+      - step: pick_event
+        action: user selects event_key
+        presenter: get_event_and_action_vms(member, event_key)
+        result:
+          - if no actions: rebuild event picker or plain message
+          - else: swap same-ephemeral to Action select view
+      - step: pick_action
+        action: user selects action_event_id
+        branching:
+          - if ActionOptionVM.input_fields is empty: submit immediately
+          - else: open ReportActionModal with dynamic fields
+      - step: submit
+        action: presentation builds UserActionCreateDTO and calls submit_user_action
+        result:
+          - on error: ephemeral error text
+          - on success: new ephemeral with points/reward + submitted values

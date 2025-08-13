@@ -58,6 +58,19 @@ def parse_help_texts(input_help_text: Optional[str], fields: list[str]) -> dict[
             result[fname] = ""
     return result
 
+def build_help_text_list(help_map: dict[str, str] | None, fields: list[str]) -> str:
+    """
+    Convert {"general": "...", "url": "...", ...} to a JSON list:
+    [general, <one per field in `fields` order>]
+    Returns a JSON string ready to save in ActionEvent.input_help_text.
+    """
+    help_map = help_map or {}
+    general = str(help_map.get("general") or "").strip()
+    arr = [general]
+    for f in fields:
+        arr.append(str(help_map.get(f) or "").strip())
+    return json.dumps(arr, ensure_ascii=False)
+
 def parse_message_link(message_link: str) -> tuple[int, int]:
     """
     Parse a Discord message link into (channel_id, message_id).

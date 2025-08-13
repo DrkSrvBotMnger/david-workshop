@@ -1,3 +1,4 @@
+# bot/crud/inventory_crud.py
 from sqlalchemy.orm import Session
 from sqlalchemy import case, and_, func
 from typing import Optional, List, Iterable
@@ -142,3 +143,18 @@ def set_badges_equipped(session: Session, user_id: int, selected_keys: Iterable[
             updated += 1
     session.flush()
     return updated
+
+def add_or_increment_inventory(
+    session: Session, *, user_id: int, reward_id: int, is_stackable: bool
+) -> None:
+    inv = (
+        session.query(Inventory)
+        .filter(Inventory.user_id == user_id, Inventory.reward_id == reward_id)
+        .first()
+    )
+    if inv:
+        if is_stackable:
+            inv.quantity = (inv.quantity or 0) + 1
+    else:
+        session.add(Inventory(user_id=user_id, reward_id=reward_id, quantity=1))
+    session.flush()

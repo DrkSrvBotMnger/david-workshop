@@ -3,28 +3,44 @@
 ```
 ├─ bot/
 │  ├─ cogs/
-│  │  └─ user/
+│  │  ├─ admin/
+│  │  │  ├─ prompts_cog.py              # clean             
+│  │  │  ├─          
+│  │  │  ├─          
+│  │  │
+│  │  ├─ users                  
 │  │     ├─ profile_cog.py              # clean 
 │  │     ├─ event_cog.py                # clean 
 │  │
 │  ├─ crud/
 │  │  ├─ users_crud.py                  # partially clean
 │  │  ├─ events_crud.py                 # partially clean
-│  │  └─ inventory_crud.py              
+│  │  ├─ inventory_crud.py              
+│  │  ├─ rewards_crud.py                # partially clean
+│  │  ├─ action_events_crud.py          
+│  │  ├─ user_actions_crud.py           # clean     
+│  │  ├─ user_event_data_crud.py        # clean         
+│  │  └─ prompts_crud.py                # clean
 │  │
 │  ├─ services/
 │  │  ├─ events_service.py              # clean
+│  │  ├─ action_events_service.py       # clean       
+│  │  ├─ prompts_service.py                 
 │  │  ├─ inventory_service.py              
+│  │  ├─ rewards_service.py             # clean 
+│  │  ├─ user_actions_service.py        # clean              
 │  │  └─ users_service.py               # clean
 │  │
 │  ├─ presentation/
 │  │  ├─ profile_presentation.py        # clean
-│  │  ├─ event_presentation.py          # clean
-│  │  ├─ equip_service.py               
+│  │  ├─ events_presentation.py         # clean
+│  │  ├─ actions_presentation.py        # clean
+│  │  ├─ user_actions_presentation.py   # clean
+│  │  ├─                
 │  │
 │  ├─ ui/
 │  │  ├─ admin/
-│  │  │  ├─             
+│  │  │  ├─ prompts_views               #clean             
 │  │  │  ├─          
 │  │  │  ├─          
 │  │  │
@@ -34,6 +50,7 @@
 │  │  │  ├─ equip_title_view.py         
 │  │  │  ├─ equip_badge_view.py         
 │  │  │  ├─ events_views.py             # clean
+│  │  │  ├─ report_action_views.py      # clean
 │  │  │  └─ shop_dashboard_view.py          
 │  │  │
 │  │  ├─ common/
@@ -125,6 +142,7 @@
 * `safe_parse_date(date_str)` — YYYY-MM-DD or None
 * `parse_required_fields(input_fields_json)` — ordered required fields
 * `parse_help_texts(input_help_text, fields)` — ActionEvent help texts as dict
+* `build_help_text_list(help_map` — ActionEvent help map as a list
 * `parse_message_link(message_link)` — Discord link → (channel\_id, message\_id)
 
 ### bot/utils/permissions.py
@@ -273,6 +291,7 @@
 ### bot/cogs/user/event_cog.py
 
 * `/event` — initial select (followup.send) → on select: fetch original message and **edit** the same ephemeral to show the event preview + buttons; Back restores the select. &#x20;
+* `/report_action` command; builds the initial view via `make_event_select_view`.
 
 ---
 
@@ -282,3 +301,53 @@
 * **bot/ui/common/confirms.py** — old confirm view
 * **bot/ui/common/paginator.py** — old paginator implementation
 * Other CRUD/services/UI in admin/events/rewards/actions/shop flows not yet reviewed
+
+
+
+
+
+# Catalogue (modules & responsibilities)
+
+**Cogs**
+
+
+**UI**
+
+* `bot/ui/common/selects.py` — `GenericSelectView`, `build_select_options_from_vms`.
+* `bot/ui/user/report_action_views.py` — view builders (`make_event_select_view`, `make_action_select_view`) and `ReportActionModal` (discord.py 2.x `TextInput`).
+
+**Presentation**
+
+* `bot/presentation/user_actions_presentation.py`
+
+  * VMs: `EventPickVM`, `ActionOptionVM`.
+  * Builders: `get_event_pick_vms`, `get_event_and_action_vms`.
+  * Wrapper: `submit_report_action_presentation(member, …)` (opens DB session, builds DTO, calls service).
+
+**Services**
+
+* `bot/services/user_actions_service.py` — `submit_user_action`: validates rules, logs action, adds points, grants direct reward, **commit**.
+* `bot/services/action_events_service.py` — `list_user_doable_action_events`: user scoping, event gating, repeatability filtering.
+* `bot/services/events_service.py` — `list_user_reporting_events`, `get_event_dto_by_key`, `get_status_name`, `get_event_is_open_for_action`.
+* `bot/services/rewards_service.py` — ORM→DTO (`RewardGrantDTO`), bump counters.
+* (others present but not central to this flow: `inventory_service.py`, `users_service.py` for DTO fetch.)
+
+**CRUD (single‑table only)**
+
+* `action_events_crud.py` — list/filter AE rows; `get_action_event_bundle`; repeatability check.
+* `user_actions_crud.py` — insert into `user_actions`.
+* `user_event_data_crud.py` — ensure/create per‑event user row; increment event points.
+* `users_crud.py` — `add_points_to_user`, `get_or_create_user` (used by users\_service).
+* `rewards_crud.py` — fetch reward by reward\_event\_id; increment number\_granted.
+* `inventory_crud.py` — add/increment inventory.
+* `events_crud.py` — `get_event_by_key`, `list_user_reporting_events`.
+
+**Domain**
+
+* `bot/domain/dto.py` — `ActionEventDTO`, `UserActionCreateDTO`, `ActionReportResultDTO`, `RewardGrantDTO`.
+* `bot/domain/mapping.py` — `to_action_event_dto`, `reward_to_grant_dto`.
+
+**Utils**
+
+* `bot/utils/parsing.py` — `parse_required_fields`, `parse_help_texts`.
+* `bot/utils/...` — (time helpers, formatting, etc., as already in your tree).

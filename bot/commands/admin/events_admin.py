@@ -443,7 +443,7 @@ class AdminEventPickerView(discord.ui.View):
                     "reward_event_key": ae.reward_event.reward_event_key if ae.reward_event else None,
                     "is_allowed_during_visible": ae.is_allowed_during_visible,
                     "is_self_reportable": ae.is_self_reportable,
-                    "input_help_text": ae.input_help_text or None,
+                    "input_help_json": ae.input_help_json or None,
                 })
     
             # --- Rewards: add info about linked actions (for onaction availability) ---

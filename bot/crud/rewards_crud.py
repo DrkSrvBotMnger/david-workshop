@@ -5,7 +5,24 @@ from bot.crud import general_crud
 from bot.utils.time_parse_paginate import now_iso
 from db.schema import Reward, RewardLog, RewardEvent, Event, EventStatus
 
+def get_reward_by_reward_event_id(session: Session, reward_event_id: int) -> Reward | None:
+    revent = session.query(RewardEvent).get(reward_event_id)
+    if not revent:
+        return None
+    return session.query(Reward).get(revent.reward_id)
 
+def increment_reward_number_granted(session: Session, reward_id: int, delta: int = 1) -> None:
+    if not delta:
+        return
+    reward = session.query(Reward).get(reward_id)
+    if not reward:
+        return
+    reward.number_granted = (reward.number_granted or 0) + delta
+    session.flush()
+
+
+
+# ------------------------------ Old CRUD functions to be reworked ------------------------------
 # --- GET ---
 def get_reward_by_key(
     session: Session, 

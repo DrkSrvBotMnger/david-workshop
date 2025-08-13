@@ -13,11 +13,9 @@ from db.schema import (
 from bot.crud import users_crud
 from bot.utils.time_parse_paginate import now_iso, parse_required_fields, parse_help_texts
 
-
 # -----------------------------
 # Helpers
 # -----------------------------
-
 
 def get_self_reportable_action_events(session):
     """

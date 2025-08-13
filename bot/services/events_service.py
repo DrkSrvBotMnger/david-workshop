@@ -109,3 +109,20 @@ def get_event_message_refs_dto(event_key: str) -> EventMessageRefsDTO | None:
             embed_channel_discord_id=refs.embed_channel_discord_id,
             embed_message_discord_id=refs.embed_message_discord_id
         )
+
+def get_status_name(event) -> str:
+    # Supports Enum or plain string
+    return getattr(event.event_status, "name", str(event.event_status))
+
+def get_event_is_open_for_action(event, *, allowed_during_visible: bool) -> bool:
+    """
+    Return True if the event is 'active', or if it is 'visible' and the
+    action is allowed during visible status.
+
+    Uses get_status_name() to support Enum or string status values.
+    """
+    status = get_status_name(event)  # 'active', 'visible', etc.
+    return (
+        status == "active"
+        or (status == "visible" and allowed_during_visible)
+    )

@@ -11,6 +11,7 @@ from bot.presentation.events_presentation import make_event_options, event_defau
 
 # UI
 from bot.ui.user.events_views import make_user_event_select_view, UserEventButtons
+from bot.ui.user.report_action_views import make_event_select_view
 
 class EventCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -104,7 +105,21 @@ class EventCog(commands.Cog):
 
         # Initial render (send, not edit)
         await render_list(interaction, initial=True)
+        
 
+    @app_commands.command(name="report_action", description="Report an action for an event.")
+    async def report_action(self, interaction: discord.Interaction):
+        view = make_event_select_view(interaction.user.id)
+        if view is None:
+            await interaction.response.send_message("⚠️ No events available right now.", ephemeral=True)
+            return
+    
+        await interaction.response.send_message(
+            "🎯 Select the event first:",
+            view=view,
+            ephemeral=True
+        )
+    
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(EventCog(bot))

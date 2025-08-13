@@ -83,8 +83,11 @@ def base_action_event(test_session, base_event, base_action):
         event_id=base_event.id,
         variant="default",
         points_granted=0,
+        is_numeric_multiplier=True,
         is_allowed_during_visible=False,
         is_self_reportable=True,
+        is_repeatable=True,
+        prompts_required=False,
         created_by="tester",
         created_at=datetime.now(timezone.utc).isoformat()
     )

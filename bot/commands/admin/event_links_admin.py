@@ -238,9 +238,9 @@ class EventLinksAdminFriendly(commands.Cog):
                             ephemeral=True
                         )
                     if help_view.help_texts_json is False:
-                        input_help_text = ""  # user chose No
+                        input_help_json = ""  # user chose No
                     else:
-                        input_help_text = help_view.help_texts_json  # already JSON string
+                        input_help_json = help_view.help_texts_json  # already JSON string
     
                     # === Step H: Create Action-Event ===
                     action_events_crud.create_action_event(
@@ -253,7 +253,7 @@ class EventLinksAdminFriendly(commands.Cog):
                             "is_allowed_during_visible": is_allowed_during_visible,
                             "is_self_reportable": is_self_reportable,
                             "is_repeatable": is_repeatable,
-                            "input_help_text": input_help_text,
+                            "input_help_json": input_help_json,
                             "reward_event_id": reward_event.id,
                             "created_by": str(interaction.user.id),
                             "created_at": iso_now
@@ -484,9 +484,9 @@ class EventLinksAdminFriendly(commands.Cog):
                             ephemeral=True
                         )
                     if help_view.help_texts_json is False:
-                        input_help_text = ""  # user chose No
+                        input_help_json = ""  # user chose No
                     else:
-                        input_help_text = help_view.help_texts_json  # already JSON string
+                        input_help_json = help_view.help_texts_json  # already JSON string
         
                     # === Step H: Create Action-Event ===
                     action_events_crud.create_action_event(
@@ -499,7 +499,7 @@ class EventLinksAdminFriendly(commands.Cog):
                             "is_allowed_during_visible": is_allowed_during_visible,
                             "is_self_reportable": is_self_reportable,
                             "is_repeatable": is_repeatable,
-                            "input_help_text": input_help_text,
+                            "input_help_json": input_help_json,
                             "reward_event_id": reward_event.id,
                             "created_by": str(interaction.user.id),
                             "created_at": iso_now
@@ -708,9 +708,9 @@ class EventLinksAdminFriendly(commands.Cog):
             if help_view.help_texts_json is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
             if help_view.help_texts_json is False:
-                input_help_text = ""  # user chose No
+                input_help_json = ""  # user chose No
             else:
-                input_help_text = help_view.help_texts_json  # already JSON string
+                input_help_json = help_view.help_texts_json  # already JSON string
     
             # === Step 9: Create Action-Event ===
             iso_now = now_iso()
@@ -725,7 +725,7 @@ class EventLinksAdminFriendly(commands.Cog):
                     "is_allowed_during_visible": is_allowed_during_visible,
                     "is_self_reportable": is_self_reportable,
                     "is_repeatable": is_repeatable,
-                    "input_help_text": input_help_text,
+                    "input_help_json": input_help_json,
                     "reward_event_id": None,
                     "created_by": str(interaction.user.id),
                     "created_at": iso_now
@@ -837,7 +837,7 @@ class EventLinksAdminFriendly(commands.Cog):
 
             linked_action = ae.action
             action_fields = parse_required_fields(linked_action.input_fields_json)
-            prefills = parse_help_texts(ae.input_help_text, action_fields)
+            prefills = parse_help_texts(ae.input_help_json, action_fields)
                 
             help_view = HelpTextPerFieldView(fields=action_fields)
             await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
@@ -845,9 +845,9 @@ class EventLinksAdminFriendly(commands.Cog):
             if help_view.help_texts_json is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
             if help_view.help_texts_json is False:
-                input_help_text = ""  # user chose No
+                input_help_json = ""  # user chose No
             else:
-                input_help_text = help_view.help_texts_json  # already JSON string
+                input_help_json = help_view.help_texts_json  # already JSON string
     
             # === Step 8: Perform Update ===
             iso_now = now_iso()
@@ -859,7 +859,7 @@ class EventLinksAdminFriendly(commands.Cog):
                     "is_allowed_during_visible": is_allowed_during_visible,
                     "is_self_reportable": is_self_reportable,
                     "is_repeatable": is_repeatable,
-                    "input_help_text": input_help_text,
+                    "input_help_json": input_help_json,
                     "modified_by": str(interaction.user.id),
                     "modified_at": iso_now
                 },

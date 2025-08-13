@@ -8,7 +8,6 @@ from db.schema import (
     Reward, RewardEvent
 )
 
-
 # --- LOG ---
 def log_change(
     *,
