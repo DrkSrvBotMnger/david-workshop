@@ -44,6 +44,22 @@ class CustomVariantModal(discord.ui.Modal, title="Custom Variant"):
         await interaction.response.defer()
 
 
+class PromptGroupModal(discord.ui.Modal, title="Prompt Group Name"):
+    prompt_group = discord.ui.TextInput(
+        label="Prompt group (e.g. sfw, nsfw, weekly, etc)",
+        placeholder="Leave blank if not using a group",
+        required=False
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.variant_value = None
+
+    async def on_submit(self, inter: Interaction):
+        self.variant_value = self.prompt_group.value.strip() or None
+        await inter.response.defer()
+
+
 # ====== MODAL FOR HELP TEXT ======
 class HelpTextModal(discord.ui.Modal, title="User Help Text"):
     help_input = discord.ui.TextInput(

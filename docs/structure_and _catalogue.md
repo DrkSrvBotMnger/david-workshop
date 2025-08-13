@@ -110,6 +110,7 @@
 * **CUSTOM\_DISCORD\_EMOJI**, **UNICODE\_EMOJI** — emoji regex patterns
 * **MAX\_BADGES** — display limit on profile
 * **CURRENCY** — display the currency name
+* **EVENT_TYPES** — list of accepted event types
 
 ### bot/config/environments.py
 

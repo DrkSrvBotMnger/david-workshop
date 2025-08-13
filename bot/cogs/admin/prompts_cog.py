@@ -94,5 +94,9 @@ class AdminPromptsCog(commands.Cog, name="Admin Prompts"):
         msg = f"**Prompts for {ev.event_key}**" + (f" (group: **{group}**)" if group else "") + "\n" + "\n".join(lines[:50])
         await interaction.followup.send(msg, ephemeral=True)
 
+
+    
+
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(AdminPromptsCog(bot))

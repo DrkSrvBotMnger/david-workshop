@@ -50,8 +50,9 @@ def submit_user_action(
     Validate availability + rules, write logs/points/rewards, return result DTO.
     Returns a human error string on failure.
     """
+    
     user = get_or_create_user_dto(session, member)
-
+    
     bundle = get_action_event_bundle(session, payload.action_event_id)
     if not bundle:
         return "❌ Action not found."
@@ -71,7 +72,7 @@ def submit_user_action(
     err = _required_fields_present(dto, payload)
     if err:
         return err
-
+        
     # points calculation
     base = dto.points_granted or 0
     points_awarded = base
@@ -82,7 +83,7 @@ def submit_user_action(
         if dto.is_numeric_multiplier:
             points_awarded = base * payload.numeric_value
             numeric_applied = True
-
+    
     ts = now_iso()
 
     # ensure per-event stats (set joined_at only on create)
@@ -94,9 +95,9 @@ def submit_user_action(
             joined_at_if_create=ts,
             created_by_if_create=str(payload.user_discord_id),
         )
-
+        
     # log the action
-    insert_user_action(
+    inserted = insert_user_action(
         session,
         user_id=user.id,
         action_event_id=ae.id,
@@ -109,13 +110,13 @@ def submit_user_action(
         boolean_value=payload.boolean_value,
         date_value=payload.date_value,
     )
-
+    
     # points
     if points_awarded:
         add_points_to_user(session, user.id, points_awarded)
         if ev is not None:
             add_points_to_user_event_data(session, user_id=user.id, event_id=ev.id, delta_points=points_awarded)
-
+            
     # direct reward
     reward_name: str | None = None
     if ae.reward_event_id:
@@ -130,9 +131,10 @@ def submit_user_action(
             bump_reward_granted_counter(session, reward_dto.id, qty=1)
             reward_name = reward_dto.reward_name
 
-    session.commit()
+    session.flush()
 
     action_label = f"{dto.action_description}" + (f" ({dto.variant})" if dto.variant else "")
+    
     return ActionReportResultDTO(
         points_base=base,
         points_awarded=points_awarded,
@@ -145,4 +147,5 @@ def submit_user_action(
         text_value=payload.text_value,
         boolean_value=payload.boolean_value,
         date_value=payload.date_value,
+        user_action_id=inserted.id
     )

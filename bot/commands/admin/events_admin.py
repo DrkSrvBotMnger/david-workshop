@@ -5,7 +5,7 @@ from typing import Optional
 
 from sqlalchemy.sql.base import _exclusive_against
 from bot.crud import events_crud, action_events_crud, reward_events_crud
-from bot.config import EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE
+from bot.config import EVENT_ANNOUNCEMENT_CHANNEL_ID, EVENTS_PER_PAGE, LOGS_PER_PAGE, EVENT_TYPES
 from bot.utils.time_parse_paginate import admin_or_mod_check, safe_parse_date, confirm_action, paginate_embeds, format_discord_timestamp, format_log_entry, parse_message_link, post_announcement_message
 from db.database import db_session
 from db.schema import EventLog, EventStatus, ActionEvent, Action
@@ -486,7 +486,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
     @admin_or_mod_check()
     @app_commands.describe(
         shortcode="Shortcode for the event (date auto-added: YYMM)",
-        event_type="Type of event (by default freeform only for now)",
+        event_type="Type of event (freeform or prompt)",
         name="Full name of the event",
         description="Public-facing description",
         start_date="Start date (YYYY-MM-DD)",
@@ -505,7 +505,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         name: str,
         description: str,
         start_date: str,
-        event_type: Optional[str] = "freeform",  # for now, only freeform events are supported]
+        event_type: Optional[str] = "freeform",  
         end_date: Optional[str] = None,
         coordinator: Optional[discord.Member] = None,
         priority: int = 0,
@@ -517,8 +517,9 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        # TEMP: only freeform events are supported for now
-        event_type = "freeform"
+        if event_type not in EVENT_TYPES:
+            event_type = "freeform"
+        
         
         # Handle date parsing
         start_date_parsed = safe_parse_date(start_date)

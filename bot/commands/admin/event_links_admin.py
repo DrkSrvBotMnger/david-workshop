@@ -9,7 +9,7 @@ from bot.config.constants import CURRENCY
 from bot.ui.admin.event_link_views import (
     EventSelect, RewardSelect, RewardEventSelect, AvailabilitySelect, PricePicker, ForceConfirmView, ActionEventSelect,
     ActionSelect, VariantPickerView, HelpTextPerFieldView, YesNoView, ToggleYesNoView,
-    SingleSelectView, PointPickerView
+    SingleSelectView, PointPickerView, PromptGroupModal
 )
 
 class EventLinksAdminFriendly(commands.Cog):
@@ -226,8 +226,26 @@ class EventLinksAdminFriendly(commands.Cog):
                             ephemeral=True
                         )
                     is_repeatable = repeatable_view.value
+
+                    # === Step G: Is num a multiplier? ===    
+                    multiplier_view = ToggleYesNoView("Treat numeric value as a multiplier?")
+                    await interaction.followup.send(multiplier_view.prompt, view=multiplier_view, ephemeral=True)
+                    await multiplier_view.wait()
+                    if multiplier_view.value is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+                    is_numeric_multiplier = multiplier_view.value
+
+                    # === Step H: Is prompt required ===
+                    prompt_required_view = ToggleYesNoView("Should this action use prompt selection?")
+                    await interaction.followup.send(prompt_required_view.prompt, view=prompt_required_view, ephemeral=True)
+                    await prompt_required_view.wait()
+                    if prompt_required_view.value is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+                    prompts_required = prompt_required_view.value
                     
-                    # === Step G: Input help text ===
+
+             
+                    # === Step J: Input help text ===
                     action_fields = parse_required_fields(action.input_fields_json)    
                     help_view = HelpTextPerFieldView(fields=action_fields)
                     await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
@@ -242,7 +260,7 @@ class EventLinksAdminFriendly(commands.Cog):
                     else:
                         input_help_json = help_view.help_texts_json  # already JSON string
     
-                    # === Step H: Create Action-Event ===
+                    # === Step K: Create Action-Event ===
                     action_events_crud.create_action_event(
                         session,
                         {
@@ -255,6 +273,8 @@ class EventLinksAdminFriendly(commands.Cog):
                             "is_repeatable": is_repeatable,
                             "input_help_json": input_help_json,
                             "reward_event_id": reward_event.id,
+                            "is_numeric_multiplier": is_numeric_multiplier,
+                            "prompts_required": prompts_required,
                             "created_by": str(interaction.user.id),
                             "created_at": iso_now
                         },
@@ -472,8 +492,24 @@ class EventLinksAdminFriendly(commands.Cog):
                             ephemeral=True
                         )
                     is_repeatable = repeatable_view.value
-        
-                    # === Step G: Input help text ===
+
+                    # === Step G: Is num a multiplier? ===    
+                    multiplier_view = ToggleYesNoView("Treat numeric value as a multiplier?")
+                    await interaction.followup.send(multiplier_view.prompt, view=multiplier_view, ephemeral=True)
+                    await multiplier_view.wait()
+                    if multiplier_view.value is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+                    is_numeric_multiplier = multiplier_view.value
+
+                    # === Step H: Is prompt required ===
+                    prompt_required_view = ToggleYesNoView("Should this action use prompt selection?")
+                    await interaction.followup.send(prompt_required_view.prompt, view=prompt_required_view, ephemeral=True)
+                    await prompt_required_view.wait()
+                    if prompt_required_view.value is None:
+                        return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+                    prompts_required = prompt_required_view.value
+                    
+                    # === Step J: Input help text ===
                     action_fields = parse_required_fields(action.input_fields_json)  
                     help_view = HelpTextPerFieldView(fields=action_fields)
                     await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
@@ -488,7 +524,7 @@ class EventLinksAdminFriendly(commands.Cog):
                     else:
                         input_help_json = help_view.help_texts_json  # already JSON string
         
-                    # === Step H: Create Action-Event ===
+                    # === Step K: Create Action-Event ===
                     action_events_crud.create_action_event(
                         session,
                         {
@@ -501,6 +537,8 @@ class EventLinksAdminFriendly(commands.Cog):
                             "is_repeatable": is_repeatable,
                             "input_help_json": input_help_json,
                             "reward_event_id": reward_event.id,
+                            "prompts_required": prompts_required,
+                            "is_numeric_multiplier": is_numeric_multiplier,
                             "created_by": str(interaction.user.id),
                             "created_at": iso_now
                         },
@@ -698,9 +736,24 @@ class EventLinksAdminFriendly(commands.Cog):
             if repeatable_view.value is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
             is_repeatable = repeatable_view.value
-    
-            # === Step 8: Help Text? ===
 
+            # === Step 8: Is num a multiplier? ===
+            multiplier_view = ToggleYesNoView("Treat numeric value as a multiplier?")
+            await interaction.followup.send(multiplier_view.prompt, view=multiplier_view, ephemeral=True)
+            await multiplier_view.wait()
+            if multiplier_view.value is None:
+                return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+            is_numeric_multiplier = multiplier_view.value
+            
+            # === Step 9: Is prompt required ===
+            prompt_required_view = ToggleYesNoView("Should this action use prompt selection?")
+            await interaction.followup.send(prompt_required_view.prompt, view=prompt_required_view, ephemeral=True)
+            await prompt_required_view.wait()
+            if prompt_required_view.value is None:
+                return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+            prompts_required = prompt_required_view.value
+                     
+            # === Step 11: Help Text? ===
             action_fields = parse_required_fields(action.input_fields_json)
             help_view = HelpTextPerFieldView(fields=action_fields)
             await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
@@ -712,7 +765,7 @@ class EventLinksAdminFriendly(commands.Cog):
             else:
                 input_help_json = help_view.help_texts_json  # already JSON string
     
-            # === Step 9: Create Action-Event ===
+            # === Step 12: Create Action-Event ===
             iso_now = now_iso()
             ae = action_events_crud.create_action_event(
                 session,
@@ -727,6 +780,8 @@ class EventLinksAdminFriendly(commands.Cog):
                     "is_repeatable": is_repeatable,
                     "input_help_json": input_help_json,
                     "reward_event_id": None,
+                    "prompts_required": prompts_required,
+                    "is_numeric_multiplier": is_numeric_multiplier,
                     "created_by": str(interaction.user.id),
                     "created_at": iso_now
                 },
@@ -831,14 +886,30 @@ class EventLinksAdminFriendly(commands.Cog):
             if repeatable_view.value is None:
                 return await interaction.followup.send(msg_timeout, ephemeral=True)
             is_repeatable = repeatable_view.value
-    
-            # === Step 7: Help Text? ===
+
+            # === Step 7: Is num a multiplier? ===
+            multiplier_view = ToggleYesNoView("Treat numeric value as a multiplier?")
+            await interaction.followup.send(multiplier_view.prompt, view=multiplier_view, ephemeral=True)
+            await multiplier_view.wait()
+            if multiplier_view.value is None:
+                return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+            is_numeric_multiplier = multiplier_view.value
+
+            # === Step 8: Is prompt required ===
+            prompt_required_view = ToggleYesNoView("Should this action use prompt selection?")
+            await interaction.followup.send(prompt_required_view.prompt, view=prompt_required_view, ephemeral=True)
+            await prompt_required_view.wait()
+            if prompt_required_view.value is None:
+                return await interaction.followup.send(f"{msg_timeout}\n{msg_ae_fail}\n{msg_re_success}", ephemeral=True)
+            prompts_required = prompt_required_view.value
+
+            # === Step 10: Help Text? ===
             # Build fields list based on the linked Action
 
             linked_action = ae.action
             action_fields = parse_required_fields(linked_action.input_fields_json)
             prefills = parse_help_texts(ae.input_help_json, action_fields)
-                
+
             help_view = HelpTextPerFieldView(fields=action_fields)
             await interaction.followup.send("💬 Add help text? (General + one per selected field)", view=help_view, ephemeral=True)
             await help_view.wait()
@@ -848,8 +919,8 @@ class EventLinksAdminFriendly(commands.Cog):
                 input_help_json = ""  # user chose No
             else:
                 input_help_json = help_view.help_texts_json  # already JSON string
-    
-            # === Step 8: Perform Update ===
+                
+            # === Step 11: Perform Update ===
             iso_now = now_iso()
             updated = action_events_crud.update_action_event(
                 session,
@@ -860,6 +931,8 @@ class EventLinksAdminFriendly(commands.Cog):
                     "is_self_reportable": is_self_reportable,
                     "is_repeatable": is_repeatable,
                     "input_help_json": input_help_json,
+                    "prompts_required": prompts_required,
+                    "is_numeric_multiplier": is_numeric_multiplier,
                     "modified_by": str(interaction.user.id),
                     "modified_at": iso_now
                 },

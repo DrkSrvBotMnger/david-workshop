@@ -152,3 +152,5 @@ class ActionReportResultDTO:
     text_value: str | None  
     boolean_value: bool | None  
     date_value: str | None
+
+    user_action_id: int

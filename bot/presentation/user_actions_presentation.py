@@ -22,6 +22,8 @@ class ActionOptionVM:
     description: str
     input_fields: list[str]
     input_help_map: dict[str, str]
+    prompts_required: bool
+    prompts_group: str | None
 
 @dataclass(frozen=True)
 class EventPickVM:
@@ -59,7 +61,9 @@ def to_action_vm(dto: ActionEventDTO, currency=":coin:") -> ActionOptionVM:
     desc = (dto.input_help_map or {}).get("general", "")[:100]
     return ActionOptionVM(
         id=dto.id, label=label[:100], description=desc,
-        input_fields=dto.input_fields, input_help_map=dto.input_help_map or {}
+        input_fields=dto.input_fields, input_help_map=dto.input_help_map or {},
+        prompts_required=dto.prompts_required,  
+        prompts_group=dto.prompts_group
     )
     
 def build_event_select_options(limit: int = 25) -> list[discord.SelectOption]:
@@ -90,7 +94,7 @@ def submit_report_action_presentation(
     text_value: str | None,
     boolean_value: bool | None,
     date_value: str | None,
-) -> ActionReportResultDTO | str:
+): 
     with db_session() as s:
         payload = UserActionCreateDTO(
             user_discord_id=str(member.id),
@@ -101,4 +105,39 @@ def submit_report_action_presentation(
             boolean_value=boolean_value,
             date_value=date_value,
         )
-        return submit_user_action(s, member, payload)
+        results = submit_user_action(s, member, payload)
+        return results
+
+def build_action_report_success_message(result: ActionReportResultDTO) -> str:
+    # --- Header line ---
+    parts = ["✅ Action recorded."]
+    if result.points_awarded:
+        parts.append(f"You won +{result.points_awarded} :coin:")
+    if result.reward_name:
+        parts.append(f"You won 🏆 **{result.reward_name}**")
+    head = " • ".join(parts)
+
+    # --- Main line with action and event ---
+    if result.numeric_applied and result.numeric_value:
+        line = (
+            f"You reported doing **{result.action_label}** "
+            f"`{result.numeric_value}` time(s) for **{result.event_name}**"
+        )
+    else:
+        line = f"You reported doing **{result.action_label}** for **{result.event_name}**"
+
+    # --- Optional values block (excluding numeric if already applied above) ---
+    values = []
+    if not result.numeric_applied and result.numeric_value is not None:
+        values.append(f"Count: `{result.numeric_value}`")
+    if result.url_value:
+        values.append(f"URL: <{result.url_value}>")
+    if result.text_value:
+        values.append(f"Text: {result.text_value[:200]}")
+    if result.boolean_value is not None:
+        values.append(f"Yes/No: {'yes' if result.boolean_value else 'no'}")
+    if result.date_value:
+        values.append(f"Date: {result.date_value}")
+
+    values_text = "\n".join(values)
+    return f"{head}\n{line}" + (f"\n{values_text}" if values_text else "")
