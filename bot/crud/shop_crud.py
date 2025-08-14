@@ -15,6 +15,7 @@ def get_inshop_catalog_grouped(session):
             RewardEvent.price,
             Reward.reward_name,
             Reward.reward_type,
+            Reward.emoji,
         )
         .join(RewardEvent, RewardEvent.event_id == Event.id)
         .join(Reward, RewardEvent.reward_id == Reward.id)
@@ -29,7 +30,7 @@ def get_inshop_catalog_grouped(session):
 
     # Group into primitives (no ORM objects)
     pages_by_event = {}
-    for ev_id, ev_name, re_key, re_price, rw_name, rw_type in rows:
+    for ev_id, ev_name, re_key, re_price, rw_name, rw_type, re_emoji in rows:
         if ev_id not in pages_by_event:
             pages_by_event[ev_id] = {
                 "event_id": ev_id,
@@ -41,6 +42,7 @@ def get_inshop_catalog_grouped(session):
             "price": re_price,
             "reward_name": rw_name,
             "reward_type": rw_type,
+            "emoji":re_emoji,
         })
 
     # Return a list of event pages

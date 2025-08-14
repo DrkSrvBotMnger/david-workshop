@@ -15,7 +15,8 @@ def build_event_embed(event_data, guild_id=None):
     
     event_status = status_icons.get(event_data["event_status"], event_data["event_status"].capitalize())
     event_type = event_data["event_type"].capitalize()
-    role_status = f"✅ <@&{event_data['role_discord_id']}>" if event_data["role_discord_id"] else "❌"
+    role_id = event_data["role_discord_id"]
+    role_status = f"✅ {role_id}" if event_data["role_discord_id"] else "❌"
     if event_data["embed_message_discord_id"] and guild_id:
         jump_link = f"https://discord.com/channels/{guild_id}/{event_data['embed_channel_discord_id']}/{event_data['embed_message_discord_id']}"
     

@@ -16,6 +16,14 @@ TYPE_LABELS = {
 
 TYPE_ORDER = ["title", "badge", "preset"]
 
+def _name_with_emoji(it: dict) -> str:
+    """For badges, show emoji + name; otherwise just the name."""
+    print(f"Reward item: {it}")
+    if it.get("reward_type") == "badge" and it.get("emoji"):
+        
+        return f"{it['emoji']} {it['reward_name']}"
+    return it["reward_name"]
+    
 def _items_for_event_page(self):
     """Items for the current event page, honoring self.filter."""
     page = self.pages[self.index]
@@ -109,7 +117,7 @@ class ShopPager(ui.View):
                 for it in by_type[t]:
                     emb.add_field(
                         name="\n",
-                        value=f"**{it['reward_name']}** — {it['price']} {CURRENCY} :coin:",
+                        value=f"**{_name_with_emoji(it)}** — {it['price']} {CURRENCY} :coin:",
                         inline=False,
                         )
 
@@ -126,7 +134,7 @@ class ShopPager(ui.View):
                 for it in items:
                     emb.add_field(
                         name="\n",
-                        value=f"**{it['reward_name']}** — {it['price']} {CURRENCY} :coin:\n*from {it['_event_name']}*",
+                        value=f"**{_name_with_emoji(it)}** — {it['price']} {CURRENCY} :coin:\n*from {it['_event_name']}*",
                         inline=False,
                     )
             else:

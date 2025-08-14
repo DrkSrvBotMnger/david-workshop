@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands, Interaction, Embed
+from discord import app_commands, Interaction, Embed, role
 from discord.ext import commands
 from typing import Optional
 
@@ -15,12 +15,20 @@ import csv
 from collections import defaultdict
 from typing import Iterable
 
+from dataclasses import dataclass
 from bot.crud import reports_crud  # <-- NEW
 
+from enum import Enum
+
+class ClearableField(str, Enum):
+    end_date = "end_date"
+    tags = "tags"
+    message = "message"        # clears embed_channel_discord_id + embed_message_discord_id
+    role = "role"
+    priority = "priority"
 
 # --- NEW: Picker UI for /admin_event show ---
 
-from dataclasses import dataclass
 
 PAGE_SIZE = 25  # Discord select max
 
@@ -198,7 +206,31 @@ def _make_report_pages(
         pages.append(emb)
     return pages
 
+# helpers
+def is_clear_str(val) -> bool:
+    return isinstance(val, str) and val.strip().upper() == "CLEAR"
 
+def coerce_role_id(val) -> str | None:
+    """
+    Accepts either a discord.Role or a string (mention or raw ID).
+    Returns the raw ID as a string, or None if it can't parse.
+    """
+    import re
+    if val is None:
+        return None
+    if isinstance(val, discord.Role):
+        return str(val.id)
+    if isinstance(val, str):
+        s = val.strip()
+        # <@&123456789> mention -> extract digits
+        m = re.fullmatch(r"<@&(\d+)>", s)
+        if m:
+            return m.group(1)
+        # raw digits
+        if s.isdigit():
+            return s
+    return None
+    
 class ReportResultsView(discord.ui.View):
     """
     Buttons: Post in channel, Export CSV, Toggle group (Action/User).
@@ -251,8 +283,6 @@ class ReportResultsView(discord.ui.View):
         button.label = "Group by: User" if self.group_mode == "action" else "Group by: Action"
         # Update the ephemeral message with the first page
         await interaction.response.edit_message(embed=self.pages[0], view=self)
-
-
 
 @dataclass
 class _EventRow:
@@ -615,15 +645,15 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         name="New full name (optional)",
         description="New description (optional)",
         start_date="New start date (YYYY-MM-DD)",
-        end_date="New end date (YYYY-MM-DD, use CLEAR to remove)",
+        end_date="New end date (YYYY-MM-DD)",
         coordinator="New coordinator (optional)",
-        tags="New comma-separated tags (use CLEAR to remove)",
-        priority="Updated display priority (use CLEAR to remove)",
-        message_link="New message link to display (use CLEAR to remove)",
-        role_id = "New discord role id to tag during announcements (use CLEAR to remove)",
+        tags="New comma-separated tags",
+        priority="Updated display priority",
+        message_link="New message link to display",
+        role_id = "New discord role id to tag during announcements",
         reason="Optional reason for editing (will be logged)"
     )
-    @app_commands.command(name="edit", description="Edit an existing event's metadata.")
+    @app_commands.command(name="edit", description="Edit an existing event's metadata. Use /admin_event clear to empty values")
     async def edit_event(
         self,
         interaction: discord.Interaction,
@@ -656,65 +686,52 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 await interaction.followup.send("⚠️ This event is active and cannot be edited. Use a separate command to deactivate it first.")
                 return
 
-    # Handle date parsing and CLEAR sentinel
-            start_date_parsed = safe_parse_date(start_date) if start_date else None
-            if start_date and not start_date_parsed:
-                await interaction.followup.send("❌ Invalid start date format. Use YYYY-MM-DD.")
-                return
-
-            if end_date and end_date.strip().upper() != "CLEAR":
-                end_date_parsed = safe_parse_date(end_date)
-                if not end_date_parsed:
-                     await interaction.followup.send("❌ Invalid end date format. Use YYYY-MM-DD or CLEAR to remove it.")
-                     return
-            else:
-                end_date_parsed = None
-
             event_update_data = {}
-            if name: 
+            # strings → set only if provided (None = no change)
+            if name is not None:
                 event_update_data["event_name"] = name
-            if description: 
+            if description is not None:
                 event_update_data["event_description"] = description
-            if start_date_parsed: 
-                event_update_data["start_date"] = start_date_parsed
-            if end_date:
-                event_update_data["end_date"] = None if end_date.strip().upper() == "CLEAR" else end_date_parsed
-            if coordinator: 
-                event_update_data["coordinator_discord_id"] = str(coordinator.id)
-            if tags:
-                if tags.strip().upper() == "CLEAR":
-                    event_update_data["tags"] = None
-                else:
-                    event_update_data["tags"] = ",".join(tag.strip() for tag in tags.split(","))            
-            if message_link: 
-                if message_link.strip().upper() == "CLEAR":
-                    if event.event_status == EventStatus.visible:
-                        await interaction.followup.send("❌ You cannot remove the embed message while the event is visible. Hide it first.")
-                        return
-                    event_update_data["embed_channel_discord_id"] = None
-                    event_update_data["embed_message_discord_id"] = None
-                else:
-                    embed_channel_discord_id, embed_message_discord_id = parse_message_link(message_link)
-                    event_update_data["embed_channel_discord_id"] = embed_channel_discord_id
-                    event_update_data["embed_message_discord_id"] = embed_message_discord_id
-            if role_id:
-                if role_id.strip().upper() == "CLEAR":
-                    event_update_data["role_discord_id"] = None 
-                else: 
-                    event_update_data["role_discord_id"] = role_id.strip()
-            if priority:
-                if priority.strip().upper() == "CLEAR":
-                    event_update_data["priority"] = 0
-                else:
-                    try:
-                        val = int(priority)
-                        if val < 0:
-                            raise ValueError
-                        event_update_data["priority"] = val
-                    except ValueError:
-                        await interaction.followup.send("❌ Priority must be a non-negative integer or CLEAR.")
-                        return
 
+            # dates
+            if start_date is not None:
+                sd = safe_parse_date(start_date)
+                if not sd:
+                    return await interaction.followup.send("❌ Invalid start date (YYYY-MM-DD).")
+                event_update_data["start_date"] = sd
+            if end_date is not None:
+                ed = safe_parse_date(end_date)
+                if not ed:
+                    return await interaction.followup.send("❌ Invalid end date (YYYY-MM-DD).")
+                event_update_data["end_date"] = ed
+
+            # coordinator
+            if coordinator is not None:
+                event_update_data["coordinator_discord_id"] = str(coordinator.id)
+
+            # tags (normalize CSV)
+            if tags is not None:
+                event_update_data["tags"] = ",".join(p.strip() for p in tags.split(",")) if tags.strip() else None
+
+            # priority (typed int)
+            if priority is not None:
+                if priority < 0:
+                    return await interaction.followup.send("❌ Priority must be ≥ 0.")
+                event_update_data["priority"] = priority
+
+            # role (typed Role)
+            if role is not None:
+                event_update_data["role_discord_id"] = str(role_id)
+
+            # embed message
+            if message_link is not None:
+                ch_id, msg_id = parse_message_link(message_link)
+                if ch_id is None or msg_id is None:
+                    return await interaction.followup.send("❌ Invalid message link.")
+                event_update_data["embed_channel_discord_id"] = ch_id
+                event_update_data["embed_message_discord_id"] = msg_id
+
+            
             if not event_update_data:
                 await interaction.followup.send("❌ No valid fields provided to update.")
                 return
@@ -734,7 +751,6 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         await interaction.followup.send(
             f"✅ Event `{safe_event_name} ({shortcode})` updated successfully." + (f"\n📝 Reason: {reason}" if reason else "")
         )
-
 
     # === DELETE EVENT ===
     @admin_or_mod_check()
@@ -790,7 +806,59 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 return
 
         await interaction.edit_original_response(content=f"✅ Event `{safe_event_name}` deleted.", view=None)
-    
+
+    # === CLEAR VALUES ===
+
+    @app_commands.command(name="clear", description="Clear specific fields on an event.")
+    async def clear_event(
+        self,
+        interaction: discord.Interaction,
+        shortcode: str,
+        field1: ClearableField,
+        field2: Optional[ClearableField] = None,
+        field3: Optional[ClearableField] = None,
+    ):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        fields = [f for f in (field1, field2, field3) if f is not None]
+
+        with db_session() as session:
+            event = events_crud.get_event_by_key(session, shortcode)
+            if not event:
+                return await interaction.followup.send(f"❌ Event `{shortcode}` not found.")
+
+            # Optional: block clearing embed while visible
+            if event.event_status == EventStatus.visible and ClearableField.message in fields:
+                return await interaction.followup.send("⚠️ Hide the event before clearing its embed message.")
+
+            updates = {}
+            for f in fields:
+                if f == ClearableField.end_date:
+                    updates["end_date"] = None
+                elif f == ClearableField.tags:
+                    updates["tags"] = None
+                elif f == ClearableField.message:
+                    updates["embed_channel_discord_id"] = None
+                    updates["embed_message_discord_id"] = None
+                elif f == ClearableField.role:
+                    updates["role_discord_id"] = None
+                elif f == ClearableField.priority:
+                    updates["priority"] = 0  # or None if allowed
+
+            if not updates:
+                return await interaction.followup.send("ℹ️ Nothing to clear.")
+
+            # ✅ pass event_key and the dict (no **)
+            events_crud.update_event(
+                session=session,
+                event_key=event.event_key,
+                event_update_data=updates,
+                reason="clear via /event clear"
+            )
+            session.flush()
+
+        await interaction.followup.send(f"🧹 Cleared: {', '.join(f.value for f in fields)}.")
+
 
     # === LIST EVENTS ===
     @admin_or_mod_check()
@@ -840,6 +908,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                 for e in chunk:
                     updated_by = f"<@{e.modified_by}>" if e.modified_by else f"<@{e.created_by}>"
                     formatted_time = format_discord_timestamp(e.modified_at or e.created_at)
+                    
                     lines = [
                         f"**Shortcode:** `{e.event_key}` | **Name:** {e.event_name}",
                         f"👤 Last updated by: {updated_by}",
