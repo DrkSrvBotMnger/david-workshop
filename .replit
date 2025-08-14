@@ -1,0 +1,5 @@
+modules = ["python-3.11"]
+
+run = "python3 -m bot.main"
+
+[nix]

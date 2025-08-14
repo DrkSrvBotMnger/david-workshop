@@ -1,18 +1,20 @@
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
 
-# Secrets / environment variables
-.env
-.env.*
+# Virtual environments (just in case)
+.env/
+venv/
+.venv/
+ENV/
+env/
 
-# Replit-specific
-.replit
-uv.lock
-
-# IDE/editor folders
+# Editor/IDE settings
 .vscode/
 .idea/
+*.sublime-workspace
+*.sublime-project
 
 # System files
 .DS_Store
@@ -22,9 +24,37 @@ Thumbs.db
 logs/
 *.log
 
-# Deprecated or backup folders
-deprecated/
-
-# Test coverage reports
+# Test/coverage reports
 htmlcov/
 .coverage
+.coverage.*
+.tox/
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Deprecated or backup folders
+deprecated/
+old/
+backup/
+
+# Replit-specific (now tracking .replit)
+uv.lock
+
+# Railway/Deployment
+# (these are rarely present, but included for clarity)
+railway.json
+
+# Secret/environment variables
+.env
+.env.*
+secrets.json
+*.secret.*
+*.token.*
+# (never store secrets or tokens in tracked files!)
+
+# __Custom for your project:__
+# Add any generated assets/PNG files not meant for git:
+assets/gen/
+assets/tmp/
