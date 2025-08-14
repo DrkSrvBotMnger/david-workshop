@@ -153,7 +153,7 @@ class InventoryView(discord.ui.View):
     @staticmethod
     def _fmt_badge(name: str, emoji: str | None, is_equipped: bool) -> str:
         right = f" • {emoji}" if emoji else ""
-        return f" • {name}{right}" + InventoryView._equipped_suffix(is_equipped, "badge")
+        return f"**{name}**{right}" + InventoryView._equipped_suffix(is_equipped, "badge")
 
     @staticmethod
     def _fmt_preset(name: str) -> str:

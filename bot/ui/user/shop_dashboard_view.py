@@ -18,11 +18,10 @@ TYPE_ORDER = ["title", "badge", "preset"]
 
 def _name_with_emoji(it: dict) -> str:
     """For badges, show emoji + name; otherwise just the name."""
-    print(f"Reward item: {it}")
     if it.get("reward_type") == "badge" and it.get("emoji"):
         
-        return f"{it['emoji']} {it['reward_name']}"
-    return it["reward_name"]
+        return f"**{it['reward_name']}** • {it['emoji']}"
+    return f"**{it['reward_name']}**"
     
 def _items_for_event_page(self):
     """Items for the current event page, honoring self.filter."""
@@ -116,8 +115,8 @@ class ShopPager(ui.View):
                 emb.add_field(name=f"__{TYPE_LABELS[t]}__", value="\n", inline=False)
                 for it in by_type[t]:
                     emb.add_field(
-                        name="\n",
-                        value=f"**{_name_with_emoji(it)}** — {it['price']} {CURRENCY} :coin:",
+                        name=f"{_name_with_emoji(it)} • {it['price']} {CURRENCY} :coin:",
+                        value=f"{it['reward_description'] if it['reward_description'] else ''}",
                         inline=False,
                         )
 
@@ -133,8 +132,8 @@ class ShopPager(ui.View):
             if items:
                 for it in items:
                     emb.add_field(
-                        name="\n",
-                        value=f"**{_name_with_emoji(it)}** — {it['price']} {CURRENCY} :coin:\n*from {it['_event_name']}*",
+                        name=f"{_name_with_emoji(it)} • {it['price']} {CURRENCY} :coin:\nfrom {it['_event_name']}",
+                        value=f"{it['reward_description'] if it['reward_description'] else ''}",
                         inline=False,
                     )
             else:
