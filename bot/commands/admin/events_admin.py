@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands, Interaction, Embed, role
+from discord import app_commands, Interaction, Embed
 from discord.ext import commands
 from typing import Optional
 
@@ -21,11 +21,15 @@ from bot.crud import reports_crud  # <-- NEW
 from enum import Enum
 
 class ClearableField(str, Enum):
-    end_date = "end_date"
-    tags = "tags"
-    message = "message"        # clears embed_channel_discord_id + embed_message_discord_id
-    role = "role"
-    priority = "priority"
+    end_date_field = "end_date"
+    tags_field = "tags"
+    message_field = "message"        # clears embed_channel_discord_id + embed_message_discord_id
+    role_field = "role"
+    priority_field = "priority"
+
+class EventTypes(str, Enum):
+    freeform = "freeform"
+    prompt = "prompt"
 
 # --- NEW: Picker UI for /admin_event show ---
 
@@ -205,31 +209,6 @@ def _make_report_pages(
     if fields_in_emb > 0 or not pages:
         pages.append(emb)
     return pages
-
-# helpers
-def is_clear_str(val) -> bool:
-    return isinstance(val, str) and val.strip().upper() == "CLEAR"
-
-def coerce_role_id(val) -> str | None:
-    """
-    Accepts either a discord.Role or a string (mention or raw ID).
-    Returns the raw ID as a string, or None if it can't parse.
-    """
-    import re
-    if val is None:
-        return None
-    if isinstance(val, discord.Role):
-        return str(val.id)
-    if isinstance(val, str):
-        s = val.strip()
-        # <@&123456789> mention -> extract digits
-        m = re.fullmatch(r"<@&(\d+)>", s)
-        if m:
-            return m.group(1)
-        # raw digits
-        if s.isdigit():
-            return s
-    return None
     
 class ReportResultsView(discord.ui.View):
     """
@@ -525,7 +504,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         priority="Order to display in listings (higher = higher)",
         tags="Comma-separated tags (e.g. rp, halloween) (optional)",
         message_link="Link to the message containing the display embed (optional)",
-        role_id = "Discord role id to tag during announcements (optional)"
+        role = "Discord role id to tag during announcements (optional)"
         )
     @app_commands.command(name="create", description="Create a new event.")
     async def create_event(
@@ -535,13 +514,13 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         name: str,
         description: str,
         start_date: str,
-        event_type: Optional[str] = "freeform",  
+        event_type: Optional[EventTypes] = "freeform",  
         end_date: Optional[str] = None,
         coordinator: Optional[discord.Member] = None,
         priority: int = 0,
         tags: Optional[str] = None,
         message_link: Optional[str] = None,
-        role_id: Optional[str] = None
+        role: Optional[discord.Role] = None
     ):
         """Creates an event. Event key is auto-generated from shortcode + start month."""
 
@@ -577,7 +556,8 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
         # Handle tags and embed channel
         tag_str = tags.lower().strip() if tags else None
-        
+
+              
         if priority < 0:
             await interaction.followup.send("❌ Priority must be a non-negative integer.")
             return
@@ -588,6 +568,12 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         else:
             embed_channel_discord_id = None
             embed_message_discord_id = None
+
+        if role is not None:
+            if role.name == "@everyone":
+                role = f"{role.name}"
+            else:
+                role = f"<@&{role.id}>"
         
         # Check for existing event_id then create event
         try:
@@ -615,7 +601,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
                     "tags": tag_str,
                     "embed_channel_discord_id": embed_channel_discord_id,
                     "embed_message_discord_id": embed_message_discord_id,
-                    "role_discord_id": role_id                    
+                    "role_discord_id": role                    
                 }
                     
                 event = events_crud.create_event(
@@ -650,7 +636,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         tags="New comma-separated tags",
         priority="Updated display priority",
         message_link="New message link to display",
-        role_id = "New discord role id to tag during announcements",
+        role = "New discord role id to tag during announcements",
         reason="Optional reason for editing (will be logged)"
     )
     @app_commands.command(name="edit", description="Edit an existing event's metadata. Use /admin_event clear to empty values")
@@ -666,7 +652,7 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
         tags: Optional[str] = None,
         priority: Optional[int] = None,
         message_link: Optional[str] = None,
-        role_id: Optional[discord.Role] = None,
+        role: Optional[discord.Role] = None,
         reason: Optional[str] = None
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
@@ -721,8 +707,11 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
             # role (typed Role)
             if role is not None:
-                event_update_data["role_discord_id"] = str(role_id)
-
+                if role.name == "@everyone":
+                    event_update_data["role_discord_id"] = f"{role.name}"
+                else:
+                    event_update_data["role_discord_id"] = f"<@&{role.id}>"
+                    
             # embed message
             if message_link is not None:
                 ch_id, msg_id = parse_message_link(message_link)
@@ -833,17 +822,17 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
             updates = {}
             for f in fields:
-                if f == ClearableField.end_date:
+                if f == ClearableField.end_date_field:
                     updates["end_date"] = None
-                elif f == ClearableField.tags:
+                elif f == ClearableField.tags_field:
                     updates["tags"] = None
-                elif f == ClearableField.message:
+                elif f == ClearableField.message_field:
                     updates["embed_channel_discord_id"] = None
                     updates["embed_message_discord_id"] = None
-                elif f == ClearableField.role:
+                elif f == ClearableField.role_field:
                     updates["role_discord_id"] = None
-                elif f == ClearableField.priority:
-                    updates["priority"] = 0  # or None if allowed
+                elif f == ClearableField.priority_field:
+                    updates["priority"] = 0 
 
             if not updates:
                 return await interaction.followup.send("ℹ️ Nothing to clear.")

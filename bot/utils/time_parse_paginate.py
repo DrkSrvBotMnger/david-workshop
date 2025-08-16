@@ -354,7 +354,7 @@ async def post_announcement_message(
 
         # Add role ping if applicable
         if role_discord_id:
-            msg = f"<@&{role_discord_id}>\n{msg}"
+            msg = f"{role_discord_id}\n{msg}"
 
         return await announcement_channel.send(msg)
 

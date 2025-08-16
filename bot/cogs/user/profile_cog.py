@@ -80,6 +80,9 @@ class ProfileCog(commands.Cog):
             await origin_msg.edit(attachments=[file], embed=None, view=view)
 
         user_db_id, options = get_title_select_options(inter.user)
+        if not options:
+            await inter.response.send_message("ℹ️ You don't own any title yet.", ephemeral=True)
+            return
         view = EquipTitleView(
             user_db_id, 
             options, 
@@ -107,6 +110,9 @@ class ProfileCog(commands.Cog):
             await origin_msg.edit(attachments=[file], embed=None, view=view)
 
         user_db_id, options = get_badge_select_options(inter.user)
+        if not options:
+            await inter.response.send_message("ℹ️ You don't own any badges yet.", ephemeral=True)
+            return
         view = EquipBadgeView(
             user_db_id, 
             options, 
@@ -185,6 +191,7 @@ class ProfileCog(commands.Cog):
             pass
 
         user_db_id, options = get_badge_select_options(interaction.user)
+        
         if not options:
             await interaction.followup.send("ℹ️ You don't own any badges yet.", ephemeral=True)
             return
