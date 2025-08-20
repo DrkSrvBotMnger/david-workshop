@@ -59,7 +59,7 @@ class ModActionsReview(commands.Cog):
                         "user_id": u.user_discord_id,
                         "event": ev.name or ev.event_key,
                         "action_event": ae.action_event_key,
-                        "url": ua.url
+                        "url_value": ua.url
                     })
 
         # Summary embed

@@ -16,7 +16,6 @@ from collections import defaultdict
 from typing import Iterable
 
 from dataclasses import dataclass
-from bot.crud import reports_crud  # <-- NEW
 
 from enum import Enum
 
@@ -1073,106 +1072,6 @@ class AdminEventCommands(commands.GroupCog, name="admin_event"):
 
         await interaction.followup.send(f"✅ Event `{safe_event_name} ({shortcode})` status changed to **{new_status.value}**.")
 
-
-    # === REPORT COMMAND ===
-    @admin_or_mod_check()
-    @app_commands.describe(
-        event="Filter by event (shortcode OR exact name). Leave empty for all.",
-        date_from="Start date (YYYY-MM-DD, optional)",
-        date_to="End date (YYYY-MM-DD, optional)",
-        action_keys="Comma-separated action keys to include (optional)",
-        only_with_url="Only include entries that have a URL (default: True)",
-        only_active_actions="Show only ACTIVE actions (default: True)"   # <-- NEW
-    )
-    @app_commands.command(name="report", description="Report of completed user actions with filters (shareable list & CSV).")
-    async def report_actions(
-        self,
-        interaction: Interaction,
-        event: Optional[str] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        action_keys: Optional[str] = None,
-        only_with_url: Optional[bool] = True,
-        only_active_actions: Optional[bool] = True,   
-    ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-    
-        # Parse date filters safely
-        df = safe_parse_date(date_from) if date_from else None
-        dt = safe_parse_date(date_to) if date_to else None
-        if date_from and not df:
-            await interaction.followup.send("❌ Invalid `date_from`. Use YYYY-MM-DD.")
-            return
-        if date_to and not dt:
-            await interaction.followup.send("❌ Invalid `date_to`. Use YYYY-MM-DD.")
-            return
-        df_iso, dt_iso = _iso_window(df, dt)
-    
-        # Parse action_keys
-        ak_list: list[str] = []
-        if action_keys:
-            ak_list = [a.strip().lower() for a in action_keys.split(",") if a.strip()]
-    
-        # Query
-        with db_session() as session:
-            # Accept event key OR event name
-            event_key = _resolve_event_key(session, event)
-    
-            rows = reports_crud.fetch_user_actions_report(
-                session,
-                event_key=event_key,
-                date_from_iso=df_iso,
-                date_to_iso=dt_iso,
-                action_keys=ak_list or None,
-                only_with_url=bool(only_with_url),
-                only_active_actions=bool(only_active_actions), 
-                limit=5000
-            )
-    
-        if not rows:
-            await interaction.followup.send("❌ No matching user actions found for those filters.")
-            return
-    
-        # Build CSV (unchanged above) -> csv_bytes
-        
-        title_bits = []
-        if event: title_bits.append(f"Event: **{event}**")
-        if df: title_bits.append(f"From: `{df}`")
-        if dt: title_bits.append(f"To: `{dt}`")
-        if ak_list: title_bits.append(f"Actions: `{', '.join(ak_list)}`")
-        if only_with_url: title_bits.append("Only URLs")
-        if only_active_actions: title_bits.append("Active actions only")
-            
-        title = "📊 User Actions Report" + (" — " + " • ".join(title_bits) if title_bits else "")
-        sio = StringIO()
-        writer = csv.writer(sio)
-        writer.writerow([
-            "event_key","event_name","action_key","variant","created_at",
-            "user_discord_id","display_name","url","numeric_value","text_value","boolean_value","date_value"
-        ])
-        for r in rows:
-            writer.writerow([
-                r.get("event_key",""),
-                r.get("event_name",""),
-                r.get("action_key",""),
-                r.get("variant",""),
-                r.get("created_at",""),
-                r.get("user_discord_id",""),
-                r.get("display_name",""),
-                r.get("url",""),
-                r.get("numeric_value",""),
-                r.get("text_value",""),
-                r.get("boolean_value",""),
-                r.get("date_value",""),
-            ])
-        csv_bytes = sio.getvalue().encode("utf-8")
-        # NEW: create the view with rows; it builds pages internally
-        view = ReportResultsView(rows=rows, title=title, csv_bytes=csv_bytes, initial_group="action")
-        
-        # Send first page + controls
-        await interaction.followup.send(embed=view.pages[0], view=view, ephemeral=True)
-        
-        
 
 # === Setup Function ===
 async def setup(bot):

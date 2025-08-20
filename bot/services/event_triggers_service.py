@@ -36,6 +36,8 @@ from bot.services.events_service import get_event_dto_by_id
 from bot.utils.formatting import now_iso
 from bot.utils.discord_helpers import format_trigger_label
 from bot.config import CURRENCY
+from bot.crud.users_crud import add_points_to_user
+from bot.crud.user_event_data_crud import add_points_to_user_event_data
 
 def apply_triggers_after_action_id(
     user_action_id: int,
@@ -689,3 +691,19 @@ def _as_int(v: Any, default: int = 0) -> int:
         return int(v)
     except Exception:
         return default
+
+
+def grant_trigger_to_user(session: Session, *, user_id: int, trigger_id: int):
+    """
+    Log the trigger grant, and if it grants points, apply them both to the user
+    and to UserEventData (per-event tally).
+    """
+    trig = get_event_trigger_by_id(session, trigger_id)
+    if not trig:
+        return
+    log_event_trigger_grant(session, user_id, trigger_id)
+    if getattr(trig, "points_granted", None):
+        pts = int(trig.points_granted)
+        add_points_to_user(session, user_id, pts)
+        if trig.event_id:  # should be set for event-scoped triggers
+            add_points_to_user_event_data(session, user_id=user_id, event_id=trig.event_id, delta_points=pts)

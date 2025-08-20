@@ -48,7 +48,8 @@ class MyBot(commands.Bot):
             "bot.commands.admin.trigger_rewards_cog",
             "bot.commands.admin.mod_economy",
             "bot.cogs.admin.prompts_cog",
-            "bot.cogs.admin.event_triggers_cog"
+            "bot.cogs.admin.event_triggers_cog",
+            "bot.cogs.admin.reporting_cog",
         ]
         for cog in admin_cogs:
             try:
