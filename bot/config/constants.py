@@ -41,7 +41,7 @@ CURRENCY = "vlachki"
 
 TRIGGER_TYPES = [
     ("prompt_count", "prompt", "Count prompts", "Submit X prompts in one report"),
-    ("prompt_unique", "prompt", "Number of unique prompt", "Complete X different prompts"),
+    ("prompt_unique", "prompt", "Number of unique prompt", "Complete X different prompts in total"),
     ("prompt_repeat", "prompt", "Repeat prompt", "Do Y prompt X times"),
     ("streak", "all", "Streak trigger", "Participate X days in a row"),
     ("event_count", "all", "Count actions", "Submit X actions/reports"),
