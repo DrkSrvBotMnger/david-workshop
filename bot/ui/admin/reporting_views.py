@@ -232,7 +232,14 @@ class LeaderboardsView(ui.View):
             if not self.action_event_select:
                 self.action_event_select = ActionEventMultiSelect(self.event_id, placeholder="Pick one or more ActionEvents…")
                 self.add_item(self.action_event_select)
-            await interaction.response.edit_message(content="Select ActionEvent(s) then press **Run**.", view=self)
+    
+            # ✅ make sure Run / Print / Export are present the first time too
+            self._refresh_export_buttons()
+    
+            await interaction.response.edit_message(
+                content="Select ActionEvent(s) then press **Run**.",
+                view=self
+            )
 
     def _refresh_export_buttons(self):
         # reset buttons

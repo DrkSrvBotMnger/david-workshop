@@ -109,33 +109,42 @@ def leaderboard_prompts_by_event(session: Session, event_id: int) -> List[Dict[s
 
     return sorted(rows, key=lambda x: (-x["unique_prompts"], -x["total_prompts"], x["display_name"].casefold()))
 
-
 def leaderboard_actions_by_action_events(
     session: Session, event_id: int, action_event_ids: Sequence[int]
 ) -> List[Dict[str, Any]]:
     """
-    Count # of user actions restricted to selected ActionEvent ids in the event.
-    Returns rows: { user_id, user_discord_id, display_name, count }
+    Count actions per user across selected ActionEvent ids.
+    If an ActionEvent has is_numeric_multiplier=True, we count numeric_value (if >0) for that row;
+    otherwise the row counts as 1.
     """
     if not action_event_ids:
         return []
+
+    num = func.coalesce(UserAction.numeric_value, 0)
+
+    # quantity per row:
+    #  - multiplier & num>0 -> num
+    #  - multiplier & num<=0 -> 0
+    #  - non-multiplier -> 1
+    qty_expr = case(
+        (ActionEvent.is_numeric_multiplier.is_(True) & (num > 0), num),
+        (ActionEvent.is_numeric_multiplier.is_(True) & (num <= 0), literal(0)),
+        else_=literal(1),
+    )
 
     q = (
         session.query(
             User.id.label("user_id"),
             User.user_discord_id.label("user_discord_id"),
             User.display_name.label("display_name"),
-            func.count(UserAction.id).label("count"),
+            func.sum(qty_expr).label("count"),
         )
         .join(UserAction, UserAction.user_id == User.id)
+        .join(ActionEvent, UserAction.action_event_id == ActionEvent.id)
+        .filter(ActionEvent.event_id == event_id)
         .filter(UserAction.action_event_id.in_(list(action_event_ids)))
-    )
-
-    # (Optional) extra safety filter on event_id from ActionEvent
-    q = q.join(ActionEvent, UserAction.action_event_id == ActionEvent.id).filter(ActionEvent.event_id == event_id)
-
-    q = q.group_by(User.id, User.user_discord_id, User.display_name).order_by(
-        func.count(UserAction.id).desc(), User.display_name.asc()
+        .group_by(User.id, User.user_discord_id, User.display_name)
+        .order_by(func.sum(qty_expr).desc(), User.display_name.asc())
     )
 
     return [dict(r._asdict()) for r in q.all()]
