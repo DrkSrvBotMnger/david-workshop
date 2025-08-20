@@ -506,3 +506,71 @@ class SingleSelectView(discord.ui.View):
         self.selected_reward_event_key = None
         self.selected_action_key = None
         self.selected_action_event_key = None
+
+
+
+# === GENERIC PAGINATED SELECT (25-per page safe) ===
+class _OptionSelect(discord.ui.Select):
+    def __init__(self, options: list[discord.SelectOption], placeholder: str):
+        super().__init__(placeholder=placeholder, options=options, min_values=1, max_values=1)
+
+    async def callback(self, interaction: Interaction):
+        # store selected value on the parent view
+        self.view.selected_value = self.values[0]
+        await interaction.response.defer()
+        self.view.stop()
+
+
+class PaginatedSelectView(discord.ui.View):
+    def __init__(
+        self,
+        options: list[discord.SelectOption],
+        placeholder: str = "Select…",
+        per_page: int = 25,
+        timeout: int = 60,
+    ):
+        super().__init__(timeout=timeout)
+        self.all_options = options
+        self.placeholder = placeholder
+        self.per_page = max(1, min(per_page, 25))  # never exceed Discord cap
+        self.page = 0
+        self.selected_value: str | None = None
+        self._render()
+
+    def _render(self):
+        self.clear_items()
+        start = self.page * self.per_page
+        end = start + self.per_page
+        window = self.all_options[start:end]
+        self.add_item(_OptionSelect(window, self.placeholder))
+
+        # Navigation buttons only if we need them
+        total = len(self.all_options)
+        if total > self.per_page:
+            if self.page > 0:
+                self.add_item(self.PrevButton())
+            if end < total:
+                self.add_item(self.NextButton())
+
+    class PrevButton(discord.ui.Button):
+        def __init__(self):
+            super().__init__(label="◀ Prev", style=discord.ButtonStyle.secondary)
+
+        async def callback(self, interaction: Interaction):
+            v: PaginatedSelectView = self.view  # type: ignore
+            if v.page > 0:
+                v.page -= 1
+                v._render()
+                await interaction.response.edit_message(view=v)
+
+    class NextButton(discord.ui.Button):
+        def __init__(self):
+            super().__init__(label="Next ▶", style=discord.ButtonStyle.secondary)
+
+        async def callback(self, interaction: Interaction):
+            v: PaginatedSelectView = self.view  # type: ignore
+            max_page = (len(v.all_options) - 1) // v.per_page
+            if v.page < max_page:
+                v.page += 1
+                v._render()
+                await interaction.response.edit_message(view=v)

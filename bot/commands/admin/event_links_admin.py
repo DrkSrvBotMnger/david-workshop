@@ -1,4 +1,4 @@
-from discord import app_commands, Interaction
+from discord import app_commands, Interaction, SelectOption
 from discord.ext import commands
 from bot.utils.time_parse_paginate import admin_or_mod_check, now_iso
 from db.database import db_session
@@ -9,7 +9,7 @@ from bot.config.constants import CURRENCY
 from bot.ui.admin.event_link_views import (
     EventSelect, RewardSelect, RewardEventSelect, AvailabilitySelect, PricePicker, ForceConfirmView, ActionEventSelect,
     ActionSelect, VariantPickerView, HelpTextPerFieldView, YesNoView, ToggleYesNoView,
-    SingleSelectView, PointPickerView, PromptGroupModal
+    SingleSelectView, PointPickerView, PromptGroupModal, PaginatedSelectView  
 )
 
 class EventLinksAdminFriendly(commands.Cog):
@@ -66,13 +66,27 @@ class EventLinksAdminFriendly(commands.Cog):
                     ephemeral=True
                 )
 
-            reward_view = SingleSelectView(RewardSelect(available_rewards))
+            #reward_view = SingleSelectView(RewardSelect(available_rewards))
+
+            reward_options = [
+                SelectOption(
+                    label=f"{rw.reward_name} ({rw.reward_type})",
+                    value=rw.reward_key
+                )
+                for rw in available_rewards
+            ]
+            reward_view = PaginatedSelectView(
+                reward_options,
+                placeholder="Select a reward…",
+                per_page=25
+            )
+            
             await interaction.followup.send("📌 Select the reward:", view=reward_view, ephemeral=True)
             await reward_view.wait()
-            if not reward_view.selected_reward_key:
+            if not reward_view.selected_value:
                 return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
 
-            reward = rewards_crud.get_reward_by_key(session, reward_view.selected_reward_key)
+            reward = rewards_crud.get_reward_by_key(session, reward_view.selected_value)
             if not reward:
                 return await interaction.followup.send("❌ Invalid reward.", ephemeral=True)
 
@@ -333,7 +347,30 @@ class EventLinksAdminFriendly(commands.Cog):
                 return await interaction.followup.send(
                     f"❌ No rewards are linked to **{event.event_name}**.", ephemeral=True
                 )
-            re_view = SingleSelectView(RewardEventSelect(reward_events))
+            #re_view = SingleSelectView(RewardEventSelect(reward_events))
+
+            reward_options = [
+                SelectOption(
+                    label=f"{rw.reward_name} ({rw.reward_type})",
+                    value=rw.reward_key
+                )
+                for rw in reward_events
+            ]
+            re_view = PaginatedSelectView(
+                reward_options,
+                placeholder="Select a reward…",
+                per_page=25
+            )
+
+            await interaction.followup.send("📌 Select the reward:", view=re_view, ephemeral=True)
+            await re_view.wait()
+            if not re_view.selected_value:
+                return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
+
+            reward = rewards_crud.get_reward_by_key(session, re_view.selected_value)
+            if not reward:
+                return await interaction.followup.send("❌ Invalid reward.", ephemeral=True)
+            
             await interaction.followup.send("📌 Select reward-event to edit:", view=re_view, ephemeral=True)
             await re_view.wait()
             if not re_view.selected_reward_event_key:
