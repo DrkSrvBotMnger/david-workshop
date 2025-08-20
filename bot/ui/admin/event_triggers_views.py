@@ -26,6 +26,7 @@ class ConfigModal(discord.ui.Modal):
             add_field("min_count", "Minimum prompts in one report", numeric=True)
 
         elif trigger_type == "prompt_unique":
+            add_field("group", "Group of prompts to evaluate (or all)")
             add_field("min_count", "Minimum number of different prompts", numeric=True)
 
         elif trigger_type == "prompt_repeat":

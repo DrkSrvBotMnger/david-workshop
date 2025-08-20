@@ -376,11 +376,11 @@ def check_and_apply_triggers_for_action(
             label = format_trigger_label(ttype, cfg, getattr(event, "id", None))
 
             if grant.get("kind") == "points":
-                line = f"🎉 {label}: ⭐ {int(grant['points'])} {CURRENCY}"
+                line = f"🎉 {label}: ⭐ **{int(grant['points'])}** {CURRENCY}"
             else:
                 rtype = str(grant.get("reward_type", "") or "").strip()
                 rname = str(grant.get("reward_name", "") or "").strip()
-                line = f"🎉 {label}: 🏅 {rtype} - {rname}"
+                line = f"🎉 {label}: 🏅 {rtype} - **{rname}**"
 
             grant_lines.append(line)
 
@@ -414,11 +414,76 @@ def _eval_prompt_count(session: Session, user: User, event: Event, ctx: Dict[str
     ok = cur >= min_count
     return ok, f"({cur}/{min_count} prompts in one report)" if ok else ""
 
+def _eventprompt_group_column():
+    """
+    Return the EventPrompt ORM attribute used to store the 'group' value.
+    Tries several common names, returns None if no such column exists.
+    """
+    for name in ("group", "group_id", "group_num", "grp"):
+        col = getattr(EventPrompt, name, None)
+        if col is not None:
+            return col
+    return None
+
 def _eval_prompt_unique(session: Session, user: User, event: Event, ctx: Dict[str, Any], cfg: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Achieved if the user has completed at least `min_count` *different* prompts.
+    If `group` is provided (and not "all"), only count unique prompts within that group.
+    - cfg keys:
+        - group: int or str ("all" to consider all groups). Optional.
+        - min_count: int (required, >= 1)
+    Uses `ctx["distinct_prompts"]` which is the set of EventPrompt IDs across *all* the user's actions for this event.
+    """
     min_count = _as_int(cfg.get("min_count"), default=0)
-    uniq = len(ctx["distinct_prompts"])
+    if min_count <= 0:
+        return False, ""
+
+    # Interpret the group param
+    group_raw = cfg.get("group", None)
+    group_filter: Optional[int] = None
+    if isinstance(group_raw, str):
+        gr = group_raw.strip().lower()
+        if gr in ("", "all", "0", "-1", "none"):
+            group_filter = None  # treat as all groups
+        else:
+            try:
+                group_filter = int(group_raw)
+            except Exception:
+                group_filter = None
+    elif isinstance(group_raw, (int, float)):
+        group_filter = int(group_raw)
+
+    # Fast path: all groups (no filtering)
+    distinct_ids: Set[int] = ctx.get("distinct_prompts", set()) or set()
+    if not distinct_ids:
+        return False, ""
+
+    if group_filter is None:
+        uniq = len(distinct_ids)
+        ok = uniq >= min_count
+        return ok, f"({uniq}/{min_count} unique prompts)"
+
+    # Group-aware path
+    grp_col = _eventprompt_group_column()
+    if grp_col is None:
+        # No group column defined; fall back to counting all distinct prompts
+        uniq = len(distinct_ids)
+        ok = uniq >= min_count
+        return ok, f"({uniq}/{min_count} unique prompts)"
+
+    # Count only those distinct prompt IDs that belong to the requested group
+    rows = (
+        session.query(EventPrompt.id)
+        .filter(
+            EventPrompt.event_id == event.id,
+            grp_col == group_filter,
+            EventPrompt.id.in_(list(distinct_ids))
+        )
+        .all()
+    )
+    uniq = len(rows)
     ok = uniq >= min_count
-    return ok, f"({uniq}/{min_count} unique prompts)" if ok else ""
+    return ok, f"({uniq}/{min_count} unique prompts in group {group_filter})"
 
 def _eval_prompt_repeat(session: Session, user: User, event: Event, ctx: Dict[str, Any], cfg: Dict[str, Any]) -> Tuple[bool, str]:
     prompt_code = str(cfg.get("prompt_code") or "").strip()
