@@ -4,7 +4,8 @@ from db.database import db_session
 from db.schema import EventStatus
 from bot.crud.events_crud import (
     search_events, EventFilter,
-    get_event_by_key, get_event_message_refs_by_key
+    get_event_by_key, get_event_message_refs_by_key,
+    get_event_by_id
 )
 from bot.domain.mapping import event_to_dto
 from bot.domain.dto import EventDTO, EventMessageRefsDTO
@@ -73,14 +74,13 @@ def list_user_browseable_events(limit: int = 25) -> list[EventDTO]:
     
     return find_events_dto(
         status_in=(EventStatus.visible, EventStatus.active),
-        has_embed=True,
         limit=limit,
     )
 
-def list_user_reporting_events(limit: int = 25) -> list[EventDTO]:
-    
+def list_admin_editable_events(limit: int = 100) -> list[EventDTO]:
+    from db.schema import EventStatus
     return find_events_dto(
-        status_in=(EventStatus.visible, EventStatus.active),
+        status_in=(EventStatus.visible, EventStatus.active, EventStatus.draft),
         limit=limit,
     )
 
@@ -97,7 +97,12 @@ def get_event_dto_by_key(event_key: str) -> EventDTO | None:
     with db_session() as s:
         ev = get_event_by_key(s, event_key)
         return event_to_dto(ev) if ev else None
-    
+
+def get_event_dto_by_id(event_id: int) -> EventDTO | None:
+    with db_session() as s:
+        ev = get_event_by_id(s, event_id)
+        return event_to_dto(ev) if ev else None
+
 def get_event_message_refs_dto(event_key: str) -> EventMessageRefsDTO | None:
     with db_session() as s:
         refs = get_event_message_refs_by_key(s, event_key)

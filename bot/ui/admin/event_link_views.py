@@ -359,7 +359,8 @@ class AvailabilitySelect(discord.ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="In shop", value="inshop"),
-            discord.SelectOption(label="On action", value="onaction")
+            discord.SelectOption(label="On action", value="onaction"),
+            discord.SelectOption(label="On trigger", value="ontrigger")
         ]
         super().__init__(placeholder="Select availability…", options=options)
 

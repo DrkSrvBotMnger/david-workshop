@@ -83,7 +83,9 @@ class EventLinksAdminFriendly(commands.Cog):
             if not avail_view.selected_availability:
                 return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
             availability = avail_view.selected_availability
-
+            # === Step 3.5: ontrigger ===
+            if availability == "ontrigger":
+                print("ontrigger")
             # === Step 4: Price ===
             price = 0
             if availability == "inshop":
@@ -118,6 +120,8 @@ class EventLinksAdminFriendly(commands.Cog):
             # === Step 6: Announce reward creation ===
             if availability == "inshop":
                 availability_display = f"in shop for {price} {CURRENCY}"
+            elif availability == "ontrigger":
+                availability_display = "on trigger - attach the trigger with command /trigger_rewards add"
             else:
                 availability_display = "on action"
 
@@ -125,6 +129,8 @@ class EventLinksAdminFriendly(commands.Cog):
             msg_ae_fail=("❌ No action was linked.")
             
             if availability == "inshop":
+                return await interaction.followup.send(f"{msg_re_success}", ephemeral=True)
+            if availability == "ontrigger":
                 return await interaction.followup.send(f"{msg_re_success}", ephemeral=True)
 
             # === Step 7: Optional action attachment ===
@@ -349,7 +355,11 @@ class EventLinksAdminFriendly(commands.Cog):
                 return await interaction.followup.send(f"{msg_timeout}", ephemeral=True)
 
             new_availability = avail_view.selected_availability
-
+            
+            # === Step 3.5: ontrigger ===
+            if new_availability == "ontrigger":
+                print("ontrigger")
+                
             # === Step 4: Choose Price if inshop ===
             new_price = 0
             if new_availability == "inshop":
@@ -387,6 +397,8 @@ class EventLinksAdminFriendly(commands.Cog):
 
             if new_availability == "inshop":
                 new_availability_display = f"now in shop for {new_price} {CURRENCY}"
+            elif new_availability == "ontrigger":
+                new_availability_display = "on trigger - attach the trigger with command /trigger_rewards add"
             else:
                 new_availability_display = "now on action"
 
@@ -399,7 +411,9 @@ class EventLinksAdminFriendly(commands.Cog):
                 
             if new_availability == "inshop":
                     return await interaction.followup.send(f"{msg_re_success}\n{msg_del_success}", ephemeral=True)
-            
+
+            if new_availability == "ontrigger":
+                return await interaction.followup.send(f"{msg_re_success}", ephemeral=True)
             # === Step 7: Action attachment ===
             if new_availability == "onaction":
                 attach_view = YesNoView("Do you want to attach an action to this reward now?")
@@ -1022,6 +1036,7 @@ class EventLinksAdminFriendly(commands.Cog):
                 ephemeral=True
             )
     
+
 
 # ====== SETUP ======
 async def setup(bot):

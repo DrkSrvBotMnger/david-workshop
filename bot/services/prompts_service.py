@@ -10,6 +10,7 @@ from bot.crud.prompts_crud import (
     get_prompts_for_action_event_picker as crud_get_prompts_for_action_event_picker,
     count_prompt_popularity_for_event as crud_count_prompt_popularity_for_event,
     count_user_prompt_stats_for_event as crud_count_user_prompt_stats_for_event,
+    get_prompt_by_code_and_event
 )
 from bot.domain.dto import (
     EventPromptDTO,
@@ -33,6 +34,13 @@ def list_event_prompts(
     with db_session() as session:
         rows = crud_get_prompts_for_event(session, event_id, group, active_only)
         return [event_prompt_to_dto(r) for r in rows]
+
+def get_prompt_dto_by_code_and_event(
+    code: str,
+    event_id: int
+) -> Optional[EventPromptDTO]:
+    with db_session() as session:
+        return event_prompt_to_dto(get_prompt_by_code_and_event(session, code, event_id))
 
 def upsert_event_prompts_bulk(
     *,
@@ -116,4 +124,3 @@ def user_prompt_stats(event_id: int, user_id: int) -> UserPromptStatsDTO:
             total_tagged=total,
             unique_prompts=unique_,
         )
-

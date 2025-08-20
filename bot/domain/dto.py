@@ -154,3 +154,22 @@ class ActionReportResultDTO:
     date_value: str | None
 
     user_action_id: int
+
+# --- Event Trigger DTOs ---
+
+@dataclass(frozen=True)
+class EventTriggerDTO:
+    id: int
+    event_id: int | None
+    trigger_type: str
+    config: dict
+    reward_event_id: int | None
+    points_granted: int | None
+    created_at: str
+
+@dataclass(frozen=True)
+class UserEventTriggerLogDTO:
+    id: int
+    user_id: int
+    event_trigger_id: int
+    granted_at: str

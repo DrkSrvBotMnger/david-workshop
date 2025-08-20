@@ -1,6 +1,6 @@
 # bot/utils/parsing.py
 import json
-from typing import Optional
+from typing import Optional, Union
 from bot.config import SUPPORTED_FIELDS
 
 def safe_parse_date(date_str: str) -> Optional[str]:
@@ -15,13 +15,25 @@ def safe_parse_date(date_str: str) -> Optional[str]:
             continue
     return None
 
+def parse_json_field(json_field: str | None) -> dict:
+    """Parse a JSON string field into a dict, or return empty dict if blank/invalid."""
+    if not json_field:
+        return {}
+    try:
+        return json.loads(json_field)
+    except Exception:
+        return {}
+
+def build_json_field(obj: Union[dict, list]) -> str:
+    """Dump a dict to a JSON string for DB storage (ensure_ascii False for Unicode support)."""
+    if not obj:
+        return "{}"
+    return json.dumps(obj, ensure_ascii=False)
+
 def parse_required_fields(input_fields_json: Optional[str]) -> list[str]:
     """Return ordered list of required fields Action definitions (subset of SUPPORTED_FIELDS)."""
-    if not input_fields_json:
-        return []
-    try:
-        fields = json.loads(input_fields_json)
-    except Exception:
+    fields = parse_json_field(input_fields_json)
+    if not isinstance(fields, list):
         return []
     out: list[str] = []
     for f in fields:
@@ -38,16 +50,10 @@ def parse_help_texts(input_help_text: Optional[str], fields: list[str]) -> dict[
     Missing/short lists are handled gracefully.
     """
     result: dict[str, str] = {"general": ""}
-    if not input_help_text:
-        return result
-    try:
-        items = json.loads(input_help_text)
-    except Exception:
-        return result
-
+    items = parse_json_field(input_help_text)
     if not isinstance(items, list) or not items:
         return result
-
+        
     result["general"] = str(items[0]).strip() if items and items[0] is not None else ""
     per_field = items[1:]
     for i, fname in enumerate(fields):
@@ -69,7 +75,7 @@ def build_help_text_list(help_map: dict[str, str] | None, fields: list[str]) -> 
     arr = [general]
     for f in fields:
         arr.append(str(help_map.get(f) or "").strip())
-    return json.dumps(arr, ensure_ascii=False)
+    return build_json_field(arr)
 
 def parse_message_link(message_link: str) -> tuple[int, int]:
     """

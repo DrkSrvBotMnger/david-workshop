@@ -1,16 +1,27 @@
 # bot/domain/mapping.py
 from typing import Tuple
-from db.schema import Event as EventModel, User as UserModel, Action as ActionModel, Reward as RewardModel, EventPrompt, UserActionPrompt, ActionEvent, RewardEvent
+from db.schema import (
+    Event as EventModel, 
+    User as UserModel, 
+    Action as ActionModel, 
+    Reward as RewardModel, 
+    EventPrompt as EventPromptModel, 
+    UserActionPrompt as UserActionPromptModel, 
+    ActionEvent as ActionEventModel,
+    RewardEvent as RewardEventModel, 
+    EventTrigger as EventTriggerModel, 
+    UserEventTriggerLog as UserEventTriggerLogModel
+)
 from bot.domain.dto import (
     UserDTO, EventDTO, 
     ActionEventDTO,
     RewardGrantDTO,
     EventPromptDTO,
     UserActionPromptDTO,
-    PromptPopularityDTO
+    PromptPopularityDTO,
+    EventTriggerDTO, UserEventTriggerLogDTO
 )
-
-from bot.utils.parsing import parse_required_fields, parse_help_texts
+from bot.utils.parsing import parse_required_fields, parse_help_texts, parse_json_field
 
 def user_to_dto(u: UserModel) -> UserDTO:
     return UserDTO(
@@ -49,7 +60,7 @@ def reward_to_grant_dto(r: RewardModel) -> RewardGrantDTO:
         is_stackable=bool(r.is_stackable),
     )
     
-def event_prompt_to_dto(ep: EventPrompt) -> EventPromptDTO:
+def event_prompt_to_dto(ep: EventPromptModel) -> EventPromptDTO:
     return EventPromptDTO(
         id=ep.id,
         event_id=ep.event_id,
@@ -64,14 +75,14 @@ def event_prompt_to_dto(ep: EventPrompt) -> EventPromptDTO:
         modified_at=ep.modified_at,
     )
 
-def user_action_prompt_to_dto(uap: UserActionPrompt) -> UserActionPromptDTO:
+def user_action_prompt_to_dto(uap: UserActionPromptModel) -> UserActionPromptDTO:
     return UserActionPromptDTO(
         id=uap.id,
         user_action_id=uap.user_action_id,
         event_prompt_id=uap.event_prompt_id,
     )
 
-def popularity_row_to_dto(row: Tuple[EventPrompt, int]) -> PromptPopularityDTO:
+def popularity_row_to_dto(row: Tuple[EventPromptModel, int]) -> PromptPopularityDTO:
     ep, uses = row
     return PromptPopularityDTO(
         event_id=ep.event_id,
@@ -81,7 +92,7 @@ def popularity_row_to_dto(row: Tuple[EventPrompt, int]) -> PromptPopularityDTO:
         uses=int(uses),
     )
 
-def to_action_event_dto(ae: ActionEvent, action: ActionModel, revent: RewardEvent | None) -> ActionEventDTO:
+def to_action_event_dto(ae: ActionEventModel, action: ActionModel, revent: RewardEventModel | None) -> ActionEventDTO:
     fields = parse_required_fields(action.input_fields_json)
     help_map = parse_help_texts(ae.input_help_json, fields)
 
@@ -109,4 +120,23 @@ def to_action_event_dto(ae: ActionEvent, action: ActionModel, revent: RewardEven
 
         prompts_required=bool(getattr(ae, "prompts_required", False)),
         prompts_group=getattr(ae, "prompts_group", None),
+    )
+
+def to_event_trigger_dto(et: EventTriggerModel) -> EventTriggerDTO:
+    return EventTriggerDTO(
+        id=et.id,
+        event_id=et.event_id,
+        trigger_type=et.trigger_type,
+        config=parse_json_field(et.config_json),
+        reward_event_id=et.reward_event_id,
+        points_granted=et.points_granted,
+        created_at=et.created_at,
+    )
+
+def to_user_event_trigger_log_dto(uetl: UserEventTriggerLogModel) -> UserEventTriggerLogDTO:
+    return UserEventTriggerLogDTO(
+        id=uetl.id,
+        user_id=uetl.user_id,
+        event_trigger_id=uetl.event_trigger_id,
+        granted_at=uetl.granted_at,
     )

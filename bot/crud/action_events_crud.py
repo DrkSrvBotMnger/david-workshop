@@ -34,6 +34,30 @@ def list_self_reportable_action_events_for_event(
         out.append((ae, action, revent, ev))
     return out
 
+# --- READ: active action-event in one event ---
+def list_action_events_for_event(
+    session: Session,
+    event_id: int,
+) -> list[tuple[ActionEvent, Action, RewardEvent | None, Event]]:
+    """
+    Returns tuples (ae, action, revent, event) for a single event where:
+      - Action.is_active is True and Action.deactivated_at is NULL
+    """
+    q = (
+        session.query(ActionEvent, Action, RewardEvent, Event)
+        .join(Action, ActionEvent.action_id == Action.id)
+        .join(Event, ActionEvent.event_id == Event.id)
+        .outerjoin(RewardEvent, RewardEvent.id == ActionEvent.reward_event_id)
+        .filter(ActionEvent.event_id == event_id)
+        .filter(and_(Action.is_active.is_(True), Action.deactivated_at.is_(None)))
+    )
+
+    out: list[tuple[ActionEvent, Action, RewardEvent | None, Event]] = []
+    for row in q.all():
+        ae, action, revent, ev = row  # unpack Row -> real tuple
+        out.append((ae, action, revent, ev))
+    return out
+
 # --- READ: fetch 1 AE bundle by id (used on submit) ---
 def get_action_event_bundle(
     session: Session,

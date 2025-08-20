@@ -1,6 +1,6 @@
 # bot/ui/common/selects.py
 import discord
-from typing import List, Callable, Awaitable, Optional, Any
+from typing import List, Callable, Awaitable, Any
 
 AsyncOnSelect = Callable[[discord.Interaction, str], Awaitable[None]]
 
@@ -10,7 +10,7 @@ def build_select_options_from_vms(
     get_value=lambda vm: vm.value,
     get_label=lambda vm: vm.label,
     get_description=lambda vm: vm.description,
-    limit: int = 25,
+    limit: int = None,
 ) -> List[discord.SelectOption]:
     """Turn value/label/description VMs into Discord options (truncates to 100 chars)."""
     opts: List[discord.SelectOption] = []
@@ -31,14 +31,57 @@ class _GenericSelect(discord.ui.Select):
         await self._on_select(interaction, self.values[0])
 
 class GenericSelectView(discord.ui.View):
-    """Reusable select view: provide options + async on_select handler."""
     def __init__(
         self,
-        options: List[discord.SelectOption],
+        options: list[discord.SelectOption],
         on_select: AsyncOnSelect,
-        *,
         placeholder: str = "Choose an option…",
-        timeout: Optional[float] = 180,
+        per_page: int = 25,
+        timeout: float = 180,
     ):
         super().__init__(timeout=timeout)
-        self.add_item(_GenericSelect(options, on_select, placeholder))
+        self.all_options = options
+        self.on_select = on_select
+        self.placeholder = placeholder
+        self.per_page = per_page
+        self.page = 0
+
+        # Initialize buttons
+        self.prev_button = self.PreviousPageButton()
+        self.next_button = self.NextPageButton()
+
+        self._refresh_select()
+
+    def _refresh_select(self):
+        start = self.page * self.per_page
+        end = start + self.per_page
+        sliced = self.all_options[start:end]
+        select = _GenericSelect(sliced, self.on_select, self.placeholder)
+
+        self.clear_items()
+        self.add_item(select)
+
+        if len(self.all_options) > self.per_page:
+            self.add_item(self.prev_button)
+            self.add_item(self.next_button)
+
+    class PreviousPageButton(discord.ui.Button):
+        def __init__(self):
+            super().__init__(style=discord.ButtonStyle.secondary, emoji="⏮", row=1)
+
+        async def callback(self, interaction: discord.Interaction):
+            view: GenericSelectView = self.view
+            view.page = max(view.page - 1, 0)
+            view._refresh_select()
+            await interaction.response.edit_message(view=view)
+
+    class NextPageButton(discord.ui.Button):
+        def __init__(self):
+            super().__init__(style=discord.ButtonStyle.secondary, emoji="⏭", row=1)
+
+        async def callback(self, interaction: discord.Interaction):
+            view: GenericSelectView = self.view
+            max_page = (len(view.all_options) - 1) // view.per_page
+            view.page = min(view.page + 1, max_page)
+            view._refresh_select()
+            await interaction.response.edit_message(view=view)

@@ -38,3 +38,16 @@ MAX_BADGES = 12
 
 # bot currency
 CURRENCY = "vlachki"
+
+TRIGGER_TYPES = [
+    ("prompt_count", "prompt", "Count prompts", "Submit X prompts in one report"),
+    ("prompt_unique", "prompt", "Number of unique prompt", "Complete X different prompts"),
+    ("prompt_repeat", "prompt", "Repeat prompt", "Do Y prompt X times"),
+    ("streak", "all", "Streak trigger", "Participate X days in a row"),
+    ("event_count", "all", "Count actions", "Submit X actions/reports"),
+    ("action_repeat", "all", "Repeat action", "Do Y action X times"),
+    ("points_won", "all", "Number of points won", "Earn X points in the event"),
+    ("participation_days", "all", "Number of participation days", "Participate on X unique days"),
+    ("global_count", "global", "Global - count actions", "Submit X actions/reports globally"),
+    ("global_points_won", "global", "Global - number of points won", "Earn X points globally"),
+]

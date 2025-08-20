@@ -7,6 +7,7 @@ from discord import ui, Interaction, TextStyle
 from bot.ui.common.selects import GenericSelectView, build_select_options_from_vms
 from bot.presentation.user_actions_presentation import ActionOptionVM, get_event_pick_vms, get_event_and_action_vms, submit_report_action_presentation, build_action_report_success_message
 from bot.services.prompts_service import set_user_action_prompts
+from bot.services.event_triggers_service import apply_triggers_after_action_id
 
 # ----------------------- Event picker (reusable builder) -----------------------
 
@@ -20,10 +21,11 @@ def make_event_select_view(owner_id: int) -> discord.ui.View | None:
         event_vms,
         get_value=lambda vm: vm.value,
         get_label=lambda vm: vm.label,
-        get_description=lambda vm: vm.description,
-        limit=25,
+        get_description=lambda vm: vm.description
     )
-
+    if not options:
+        return None
+        
     async def on_event_selected(inter: Interaction, event_key: str):
         if inter.user.id != owner_id:
             await inter.response.send_message("⛔ You can’t use this menu.", ephemeral=True)
@@ -69,26 +71,26 @@ def make_action_select_view(owner_id: int, event_id: int, actions: list[ActionOp
         actions,
         get_value=lambda vm: vm.id,
         get_label=lambda vm: vm.label[:100],
-        get_description=lambda vm: (vm.description or "")[:100],
-        limit=25,
+        get_description=lambda vm: (vm.description or "")[:100]
     )
 
     async def on_action_selected(inter: Interaction, value: str):
         if inter.user.id != owner_id:
             await inter.response.send_message("⛔ You can’t use this menu.", ephemeral=True)
             return
-
+    
         try:
             action_event_id = int(value)
         except Exception:
             await inter.response.send_message("❌ Action not found.", ephemeral=True)
             return
-
+    
         vm = next((a for a in actions if a.id == action_event_id), None)
         if not vm:
             await inter.response.send_message("❌ Action not found.", ephemeral=True)
             return
-
+    
+        # --- Auto-submit path (no input fields) ---
         if not vm.input_fields:
             try:
                 result = submit_report_action_presentation(
@@ -101,21 +103,38 @@ def make_action_select_view(owner_id: int, event_id: int, actions: list[ActionOp
                 print(f"[ActionSelect] immediate submit error: {e}")
                 await inter.response.send_message("❌ Error while saving.", ephemeral=True)
                 return
-
+    
             if isinstance(result, str):
                 await inter.response.send_message(result, ephemeral=True)
                 return
-
+            if result is None:
+                await inter.response.send_message("❌ Unexpected error while saving.", ephemeral=True)
+                return
+    
+            # Build success + trigger grants
             msg = build_action_report_success_message(result)
+    
+            try:
+                from bot.services.event_triggers_service import apply_triggers_after_action_id
+                grant_lines = apply_triggers_after_action_id(result.user_action_id)
+            except Exception as e:
+                print(f"[ActionSelect] trigger check error: {e}")
+                grant_lines = []
+    
+            if grant_lines:
+                header = "Bonus for accomplishing the first time the following actions:"
+                msg += "\n\n" + header + "\n" + "\n".join(grant_lines)
+    
             await inter.response.send_message(msg, ephemeral=True)
             return
-
+    
+        # --- Modal path (has inputs) ---
         try:
             await inter.response.send_modal(ReportActionModal(action_event_id, vm))
         except Exception as e:
             print(f"[ActionSelect] send_modal error: {e}")
             await inter.followup.send("❌ Couldn’t open the form.", ephemeral=True)
-
+    
     return GenericSelectView(
         options=options,
         on_select=on_action_selected,
@@ -192,7 +211,8 @@ class ReportActionModal(ui.Modal, title="Report an action"):
     
             if "date_value" in self.inputs:
                 raw = self.inputs["date_value"].value.strip()
-                if not re.match(r"^\\d{4}-\\d{2}-\\d{2}$", raw):
+                # regex fix: single backslashes inside raw string
+                if not re.match(r"^\d{4}-\d{2}-\d{2}$", raw):
                     await interaction.response.send_message("⚠️ Date must be YYYY-MM-DD.", ephemeral=True)
                     return
                 dat = raw
@@ -212,8 +232,6 @@ class ReportActionModal(ui.Modal, title="Report an action"):
                 await interaction.response.send_message("❌ Unexpected error while saving the report.", ephemeral=True)
                 return
     
-            from bot.presentation.user_actions_presentation import build_action_report_success_message
-    
             # 🧩 Handle prompt case if required
             if self.vm.prompts_required:
                 from bot.services.prompts_service import picker_prompts_for_action_event
@@ -228,8 +246,20 @@ class ReportActionModal(ui.Modal, title="Report an action"):
                     )
                     return
     
-            # ✅ Fallback: success message
+            # ✅ Success (no prompt picker) + trigger grants
             msg = build_action_report_success_message(result)
+    
+            try:
+                from bot.services.event_triggers_service import apply_triggers_after_action_id
+                grant_lines = apply_triggers_after_action_id(result.user_action_id)
+            except Exception as e:
+                print(f"[Modal] trigger check error: {e}")
+                grant_lines = []
+    
+            if grant_lines:
+                header = "Bonus for accomplishing the first time the following actions:"
+                msg += "\n\n" + header + "\n" + "\n".join(grant_lines)
+    
             await interaction.response.send_message(msg, ephemeral=True)
     
         except Exception as e:
@@ -388,15 +418,36 @@ class SubmitButton(discord.ui.Button):
         summary_text = "\n".join(summary_lines) or "_(none)_"
 
         try:
+            from bot.services.prompts_service import set_user_action_prompts
             set_user_action_prompts(
                 user_action_id=view.user_action_id,
                 event_prompt_ids=list(view.selected_ids)
             )
+
+            # Base success message
             msg = build_action_report_success_message(view.result)
             msg += f"\n\n📝 You selected **{len(selected)} prompt(s)** for this action:\n{summary_text}"
+
+            # Trigger grants (prompt-dependent triggers fire here)
+            try:
+                from bot.services.event_triggers_service import apply_triggers_after_action_id
+                grant_lines = apply_triggers_after_action_id(
+                    view.user_action_id,
+                    current_prompt_ids=view.selected_ids
+                )
+            except Exception as e:
+                print(f"[PromptSubmit] trigger check error: {e}")
+                grant_lines = []
+
+            if grant_lines:
+                header = "Bonus for accomplishing the first time the following actions:"
+                msg += "\n\n" + header + "\n" + "\n".join(grant_lines)
+
             await interaction.response.edit_message(content=msg, view=None)
+
         except Exception:
             await interaction.response.send_message("❌ Could not save prompts.", ephemeral=True)
+
 
 class PrevPageButton(discord.ui.Button):
     def __init__(self, view: PromptPaginatedView):

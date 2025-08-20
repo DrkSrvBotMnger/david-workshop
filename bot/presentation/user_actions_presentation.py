@@ -1,7 +1,8 @@
+# bot/presentation/user_actions_presentation.py
 from dataclasses import dataclass
 import discord
 from db.database import db_session
-from bot.services.events_service import list_user_reporting_events, get_event_dto_by_key
+from bot.services.events_service import list_user_browseable_events, get_event_dto_by_key
 from bot.services.action_events_service import list_user_doable_action_events
 from bot.services.user_actions_service import submit_user_action
 from bot.domain.dto import ActionEventDTO, UserActionCreateDTO, ActionReportResultDTO
@@ -44,7 +45,7 @@ def to_event_pick_vm(ev) -> EventPickVM:
 def get_event_pick_vms(limit: int = 25) -> list[EventPickVM]:
     """Return a list of EventPickVMs for browseable events (visible/active)."""
     with db_session() as s:
-        rows = list_user_reporting_events(limit=limit)
+        rows = list_user_browseable_events(limit=limit)
     return [to_event_pick_vm(ev) for ev in rows]
 
 def to_event_vm(ev) -> EventOptionVM:
@@ -68,7 +69,7 @@ def to_action_vm(dto: ActionEventDTO, currency=":coin:") -> ActionOptionVM:
     
 def build_event_select_options(limit: int = 25) -> list[discord.SelectOption]:
     with db_session() as s:  # db handled here
-        rows = list_user_reporting_events(limit=limit)
+        rows = list_user_browseable_events(limit=limit)
     opts: list[discord.SelectOption] = []
     for ev in rows:
         vm = to_event_vm(ev)

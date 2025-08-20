@@ -24,6 +24,13 @@ def get_prompts_for_event(
         func.coalesce(EventPrompt.group, ""), func.coalesce(EventPrompt.day_index, 0), func.lower(EventPrompt.label)
     ).all()
 
+def get_prompt_by_code_and_event(
+    session: Session,
+    code: str,
+    event_id: int
+) -> Optional[EventPrompt]:
+    return session.query(EventPrompt).filter(EventPrompt.code == code, EventPrompt.event_id == event_id).first()
+
 def upsert_prompts_bulk(
     session: Session,
     *,

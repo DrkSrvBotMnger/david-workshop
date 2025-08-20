@@ -32,6 +32,7 @@ class User(Base):
     inventory_items = relationship("Inventory", back_populates="user", passive_deletes=True)
     event_data = relationship("UserEventData", back_populates="user", passive_deletes=True)
     actions = relationship("UserAction", back_populates="user", passive_deletes=True)
+    event_trigger_logs = relationship("UserEventTriggerLog", back_populates="user", passive_deletes=True)
 
     def __repr__(self):
         return f"<User {self.user_discord_id} name={self.username}>"
@@ -76,6 +77,9 @@ class Event(Base):
     change_logs = relationship("EventLog", back_populates="event")
     # for prompt type events
     prompts = relationship("EventPrompt", back_populates="event", passive_deletes=True)
+    # for event triggers
+    triggers = relationship("EventTrigger", back_populates="event", passive_deletes=True)
+
 
     
     def __repr__(self):
@@ -333,8 +337,7 @@ class Reward(Base):
     owned_by = relationship("Inventory", back_populates="reward", passive_deletes=True)
     media_list = relationship("RewardMedia", back_populates="reward", passive_deletes=True)
     change_logs = relationship("RewardLog", back_populates="reward")
-    event_links = relationship("RewardEvent", back_populates="reward", passive_deletes=True)    
-
+    event_links = relationship("RewardEvent", back_populates="reward", passive_deletes=True)  
     def __repr__(self):
         return f"<Reward {self.reward_key} name={self.reward_name}>"
 
@@ -386,7 +389,7 @@ class RewardEvent(Base):
     event_id = Column(Integer, ForeignKey('events.id', ondelete="CASCADE"), nullable=False)		# id in events table
     reward_id = Column(Integer, ForeignKey('rewards.id', ondelete="CASCADE"), nullable=False)		# id in rewards table
 
-    availability = Column(String, nullable=False, default="inshop")		# 'inshop', 'onaction'
+    availability = Column(String, nullable=False, default="inshop")		# 'inshop', 'onaction', 'ontrigger'
     price = Column(Integer, nullable=False, default=0)
 
     created_by = Column(String, nullable=False)		# discord unique user id
@@ -399,6 +402,7 @@ class RewardEvent(Base):
     reward = relationship("Reward", back_populates="event_links")
     granted_by_actions = relationship("ActionEvent", back_populates="reward_event")
     change_logs = relationship("RewardEventLog", back_populates="reward_event")
+    event_triggers = relationship("EventTrigger", back_populates="reward_event", passive_deletes=True)
 
     __table_args__ = (
         UniqueConstraint('event_id', 'reward_id', 'availability', name='uix_event_reward_availability'),
@@ -459,6 +463,11 @@ class EventPrompt(Base):
         UniqueConstraint("event_id", "code", name="uix_event_prompt_code"),
     )
 
+    def __repr__(self):
+        return (
+            f"<EventPrompt event={self.event_id} code={self.code} label={self.label}>"
+        )
+
 class UserActionPrompt(Base):
     __tablename__ = "user_action_prompts"
 
@@ -472,3 +481,48 @@ class UserActionPrompt(Base):
     __table_args__ = (
         UniqueConstraint("user_action_id", "event_prompt_id", name="uix_action_prompt_unique"),
     )
+    
+    def __repr__(self):
+        return (
+            f"<UserActionPrompt action={self.user_action_id} prompt={self.event_prompt_id}>"
+        )
+
+# ----- Event and Global Trigger tables -----
+
+class EventTrigger(Base):
+    __tablename__ = "event_triggers"
+
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=True)
+    trigger_type = Column(String, nullable=False)
+    config_json = Column(Text, nullable=False)  # JSON string
+    reward_event_id = Column(Integer, ForeignKey("reward_events.id", ondelete="SET NULL"), nullable=True)
+    points_granted = Column(Integer, nullable=True)
+    created_at = Column(String, nullable=False)
+
+    event = relationship("Event", back_populates="triggers")
+    reward_event = relationship("RewardEvent", back_populates="event_triggers")
+    trigger_logs = relationship("UserEventTriggerLog", back_populates="event_trigger", passive_deletes=True)
+    
+    def __repr__(self):
+        return (
+            f"<EventTrigger event={self.event_id} type={self.trigger_type} reward={self.reward_id} config={self.config}>"
+        )
+
+class UserEventTriggerLog(Base):
+    __tablename__ = "user_event_trigger_log"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    event_trigger_id = Column(Integer, ForeignKey("event_triggers.id", ondelete="CASCADE"), nullable=False)
+    granted_at = Column(String, nullable=False)
+
+    user = relationship("User", back_populates="event_trigger_logs")
+    event_trigger = relationship("EventTrigger", back_populates="trigger_logs")
+    
+    __table_args__ = (UniqueConstraint('user_id', 'event_trigger_id', name='uix_user_event_trigger'),)
+
+    def __repr__(self):
+        return (
+            f"<UserEventTriggerLog user={self.user_id} trigger={self.event_trigger_id} at={self.granted_at}>"
+        )

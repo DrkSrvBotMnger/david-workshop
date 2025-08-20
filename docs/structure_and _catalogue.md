@@ -19,7 +19,8 @@
 │  │  ├─ rewards_crud.py                # partially clean
 │  │  ├─ action_events_crud.py          
 │  │  ├─ user_actions_crud.py           # clean     
-│  │  ├─ user_event_data_crud.py        # clean         
+│  │  ├─ user_event_data_crud.py        # clean        
+│  │  ├─ event_triggers_crud.py         # clean         
 │  │  └─ prompts_crud.py                # clean
 │  │
 │  ├─ services/
@@ -28,7 +29,8 @@
 │  │  ├─ prompts_service.py                 
 │  │  ├─ inventory_service.py              
 │  │  ├─ rewards_service.py             # clean 
-│  │  ├─ user_actions_service.py        # clean              
+│  │  ├─ user_actions_service.py        # clean   
+│  │  ├─ event_triggers_service.py                    
 │  │  └─ users_service.py               # clean
 │  │
 │  ├─ presentation/
@@ -36,11 +38,13 @@
 │  │  ├─ events_presentation.py         # clean
 │  │  ├─ actions_presentation.py        # clean
 │  │  ├─ user_actions_presentation.py   # clean
+│  │  ├─ event_triggers_presentation.py # clean
 │  │  ├─                
 │  │
 │  ├─ ui/
 │  │  ├─ admin/
-│  │  │  ├─ prompts_views               #clean             
+│  │  │  ├─ prompts_views               #clean 
+│  │  │  ├─ event_triggers_views        #clean             
 │  │  │  ├─          
 │  │  │  ├─          
 │  │  │

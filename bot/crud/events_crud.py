@@ -110,7 +110,7 @@ def get_event_message_refs_by_key(session: Session, event_key: str) -> EventMess
 def get_event_by_id(
     session: Session, 
     event_id: int
-) -> Optional[Event]:
+) -> Event | None:
     """Retrieve an event by its internal event_key."""
 
     return session.query(Event).filter_by(id=event_id).first()
