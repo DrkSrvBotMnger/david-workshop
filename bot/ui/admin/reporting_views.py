@@ -79,6 +79,20 @@ def _paginate_lines(lines: list[str], hard_limit: int = 1900) -> list[str]:
         pages = [p + f"\n_Page {i+1}/{len(pages)}_" for i, p in enumerate(pages)]
     return pages
 
+def _join_and_truncate(items: list[str], sep: str = " , ", max_chars: int = 180) -> str:
+    """Join items with a separator, capping total length, and add a (+N more) suffix if needed."""
+    out, used = [], 0
+    for i, s in enumerate(items):
+        add = (sep if i else "") + s
+        if used + len(add) > max_chars:
+            remaining = len(items) - i
+            if remaining > 0:
+                out.append(f"{sep}(+{remaining} more)")
+            break
+        out.append(add if i else s)
+        used += len(add)
+    return "".join(out)
+
 def _truncate(s: str, n: int = 48) -> str:
     return (s[: n - 1] + "…") if s and len(s) > n else (s or "")
 
@@ -184,6 +198,7 @@ class LeaderboardsView(ui.View):
 
         self._last_payload: Optional[Any] = None  # cache rows for print/export
         self._last_kind: Optional[str] = None
+        self._last_action_labels: list[str] = []
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return interaction.user.id == self.author_id
@@ -199,7 +214,7 @@ class LeaderboardsView(ui.View):
 
             lines = [f"**Leaderboard – {CURRENCY.capitalize()} - {self.event_name}**"]
             for i, r in enumerate(rows, 1):
-                lines.append(f"{i:>2}. <@{r.user_discord_id}> — {r.points} pts")
+                lines.append(f"{i:>2}. <@{r.user_discord_id}> — {r.points} {CURRENCY}")
             content = "\n".join(lines) if lines else "No data."
 
             # action-event select not needed
@@ -263,8 +278,6 @@ class LeaderboardKindSelect(ui.Select):
         view: LeaderboardsView = self.view  # type: ignore[assignment]
         await view.run_and_render(interaction)
 
-
-
 class ActionEventMultiSelect(ui.Select):
     def __init__(self, event_id: int, placeholder: str = "Select ActionEvents…"):
         with db_session() as session:
@@ -288,21 +301,31 @@ class RunButton(ui.Button):
             if not sel or not sel.values:
                 await interaction.response.send_message("Pick at least one ActionEvent.", ephemeral=True)
                 return
+
+            # Collect nice labels for the header
+            selected_values = set(sel.values)
+            labels = [opt.label for opt in sel.options if opt.value in selected_values]
+            pv._last_action_labels = labels
+
             ae_ids = [int(v) for v in sel.values]
             with db_session() as session:
                 rows = get_actions_count_leaderboard(session, pv.event_id, ae_ids)
             pv._last_payload = rows
 
+            title = getattr(pv, "event_label", None) or f"Event {pv.event_id}"
             lines = [f"**Leaderboard – # of Actions - {pv.event_name}**"]
+
+            if labels:
+                lines.append(f"*Actions:* {_join_and_truncate(labels)}")
+
             for i, r in enumerate(rows, 1):
                 lines.append(f"{i:>2}. <@{r.user_discord_id}> — {r.count}")
-            content = "\n".join(lines) if lines else "No data."
 
+            content = _render_with_limit(lines) if lines else "No data."
             pv._refresh_export_buttons()
             await interaction.response.edit_message(content=content, view=pv)
         else:
             await interaction.response.send_message("Select a leaderboard kind first.", ephemeral=True)
-
 
 class PrintChannelButton(ui.Button):
     def __init__(self, parent_view: LeaderboardsView):
@@ -315,25 +338,31 @@ class PrintChannelButton(ui.Button):
             await interaction.response.send_message("Run a report first.", ephemeral=True)
             return
 
-        # Convert to lines again for printing
-        lines: List[str] = []
+        title = getattr(self.parent_view, "event_label", None) or f"Event {self.parent_view.event_id}"
+        lines: list[str] = []
+
         if self.parent_view._last_kind == "points":
             lines.append(f"**Leaderboard – {CURRENCY.capitalize()} - {self.parent_view.event_name}**")
             for i, r in enumerate(payload, 1):
-                lines.append(f"{i:>2}. <@{r.user_discord_id}> — {r.points} pts")
+                lines.append(f"{i:>2}. <@{r.user_discord_id}> — {r.points} {CURRENCY}")
+
         elif self.parent_view._last_kind == "prompts":
             lines.append(f"**Leaderboard – Prompts - {self.parent_view.event_name}**")
             for i, r in enumerate(payload, 1):
                 lines.append(f"{i:>2}. <@{r.user_discord_id}> — unique {r.unique_prompts} / total {r.total_prompts}")
-        else:
+
+        else:  # actions_count
             lines.append(f"**Leaderboard – # of Actions - {self.parent_view.event_name}**")
+            labels = getattr(self.parent_view, "_last_action_labels", []) or []
+            if labels:
+                lines.append(f"*Actions:* {_join_and_truncate(labels)}")
             for i, r in enumerate(payload, 1):
                 lines.append(f"{i:>2}. <@{r.user_discord_id}> — {r.count}")
 
         chunks = _chunk_lines(lines)
         await interaction.response.defer()
         for chunk in chunks:
-            msg = await interaction.channel.send(chunk, allowed_mentions=discord.AllowedMentions.none())  # type: ignore
+            msg = await interaction.channel.send(chunk, allowed_mentions=discord.AllowedMentions.none())
             await msg.edit(suppress=True)
 
 class ExportCsvButton(ui.Button):
@@ -372,6 +401,8 @@ class ActionListView(ui.View):
         ev = get_event_dto_by_id(event_id)
         self.event_label = ev.event_name if ev else f"(Event {event_id})"
 
+        self._sort_value: str = "created_at:desc"
+
         self.action_select = ActionEventMultiSelect(event_id, placeholder="Pick one or more ActionEvents…")
         self.add_item(self.action_select)
 
@@ -398,21 +429,34 @@ class ActionListView(ui.View):
         )
 
 class SortSelect(ui.Select):
-    def __init__(self):
+    def __init__(self, default_value: str = "created_at:desc"):
         options = [
             discord.SelectOption(label="Sort by date (desc)", value="created_at:desc", default=True),
             discord.SelectOption(label="Sort by date (asc)", value="created_at:asc"),
             discord.SelectOption(label="Sort by URL (asc)", value="url:asc"),
+            discord.SelectOption(label="Sort by number (desc)", value="numeric:desc"),
             discord.SelectOption(label="Sort by number (asc)", value="numeric:asc"),
             discord.SelectOption(label="Sort by text (asc)", value="text:asc"),
             discord.SelectOption(label="Sort by bool (asc)", value="bool:asc"),
             discord.SelectOption(label="Sort by date_value (asc)", value="date:asc"),
         ]
         super().__init__(placeholder="Pick sorting…", min_values=1, max_values=1, options=options)
+        for opt in self.options:
+            opt.default = (opt.value == default_value)
+
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        # Mark the chosen option as default so the closed dropdown shows it
+        chosen = self.values[0]
+        for opt in self.options:
+            opt.default = (opt.value == chosen)
+            
+        # Persist on the owning view
+        view: ActionListView = self.view  # type: ignore
+        view._sort_value = chosen
 
+        # Re-render the message so the visual selection updates
+        await interaction.response.edit_message(view=view)
 
 class DateInputModal(ui.Modal, title="Filter by Civic Day"):
     date = ui.TextInput(label="Date (YYYY-MM-DD) or leave blank", required=False, max_length=10, placeholder="2025-08-20")
@@ -445,7 +489,8 @@ class ActionRunButton(ui.Button):
             return
 
         ae_ids = [int(v) for v in sel.values]
-        sortv = self.parent_view.sort_select.values[0] if self.parent_view.sort_select.values else "created_at:desc"
+
+        sortv = self.parent_view._sort_value or "created_at:desc"
         field, direction = sortv.split(":")
         asc = (direction == "asc")
 

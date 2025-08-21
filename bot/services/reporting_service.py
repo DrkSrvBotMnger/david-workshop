@@ -28,8 +28,8 @@ class EventOption:
 @dataclass
 class ActionEventOption:
     id: int
-    label: str  # e.g., "submit_fic • default"
-    action_key: str
+    label: str  # e.g., "Submit a fic (default)"
+    action_description: str
     variant: str
 
 @dataclass
@@ -84,7 +84,7 @@ def build_event_options(session: Session) -> List[EventOption]:
 def build_action_event_options(session: Session, event_id: int) -> List[ActionEventOption]:
     res = []
     for ae, a in list_action_events_for_event(session, event_id):
-        res.append(ActionEventOption(id=ae.id, label=f"{a.action_key} • {ae.variant}", action_key=a.action_key, variant=ae.variant))
+        res.append(ActionEventOption(id=ae.id, label=f"{a.action_description} ({ae.variant})", action_description=a.action_description, variant=ae.variant))
     return res
 
 
